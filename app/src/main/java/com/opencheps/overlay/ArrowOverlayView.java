@@ -46,7 +46,7 @@ public class ArrowOverlayView extends View {
         shadow.setColor(0x99000000);
         head.setStyle(Paint.Style.FILL);
         frame.setStyle(Paint.Style.STROKE);
-        frame.setStrokeWidth(5f);
+        frame.setStrokeWidth(2f);
         label.setColor(0xFFFFFFFF);
         label.setTextSize(30f);
         label.setFakeBoldText(true);
@@ -97,6 +97,8 @@ public class ArrowOverlayView extends View {
     }
 
     @Override protected void onDraw(Canvas c) {
+        int[] origin=new int[2];getLocationOnScreen(origin);
+        c.save();c.translate(-origin[0],-origin[1]);
         if (boardBounds != null) {
             frame.setColor(boardFrameColor);
             c.drawRect(boardBounds, frame);
@@ -107,11 +109,14 @@ public class ArrowOverlayView extends View {
             stroke.setColor(a.color);
             head.setColor(a.color);
 
-            c.drawLine(a.sx, a.sy, a.ex, a.ey, shadow);
-            c.drawLine(a.sx, a.sy, a.ex, a.ey, stroke);
+            double direction=Math.atan2(a.ey-a.sy,a.ex-a.sx);
+            float shaftX=a.ex-(float)Math.cos(direction)*a.widthPx*1.4f;
+            float shaftY=a.ey-(float)Math.sin(direction)*a.widthPx*1.4f;
+            c.drawLine(a.sx,a.sy,shaftX,shaftY,shadow);
+            c.drawLine(a.sx,a.sy,shaftX,shaftY,stroke);
 
             double ang = Math.atan2(a.ey - a.sy, a.ex - a.sx);
-            float headLen = a.widthPx * 2.6f;
+            float headLen = a.widthPx * 2.2f;
             float wing = (float) (Math.PI / 7);
             float lx = a.ex - (float) (Math.cos(ang - wing) * headLen);
             float ly = a.ey - (float) (Math.sin(ang - wing) * headLen);
@@ -132,5 +137,7 @@ public class ArrowOverlayView extends View {
                 c.drawText(a.label, tx - (w - 18f) / 2f, ty + 8f, label);
             }
         }
+        c.restore();
     }
 }
+

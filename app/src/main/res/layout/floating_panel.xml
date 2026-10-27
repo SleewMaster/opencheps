@@ -28,7 +28,7 @@
             android:layout_height="wrap_content">
             <TextView
                 android:id="@+id/panelTitle"
-                android:text="OpenCheps"
+                android:text="OpenCheps Bot"
                 android:textColor="#FFFFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold"
@@ -81,7 +81,7 @@
         android:layout_height="wrap_content">
 
         <TextView
-            android:text="I play:"
+            android:text="Я:"
             android:textColor="#FFB0BEC5"
             android:textSize="11sp"
             android:paddingEnd="8dp"
@@ -90,7 +90,7 @@
 
         <TextView
             android:id="@+id/sideWhite"
-            android:text="WHITE"
+            android:text="БЕЛЫЕ"
             android:textColor="#FF000000"
             android:textStyle="bold"
             android:textSize="11sp"
@@ -105,7 +105,7 @@
 
         <TextView
             android:id="@+id/sideBlack"
-            android:text="BLACK"
+            android:text="ЧЁРНЫЕ"
             android:textColor="#FFCCCCCC"
             android:textSize="11sp"
             android:paddingStart="12dp"
@@ -127,3 +127,4 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 </LinearLayout>
+

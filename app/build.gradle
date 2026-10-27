@@ -7,11 +7,11 @@ android {
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.opencheps"
+        applicationId "com.opencheps.bottrainer"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "0.2.0"
+        versionCode 3
+        versionName "0.3.0"
     }
 
     buildTypes {
@@ -49,3 +49,4 @@ dependencies {
     implementation 'androidx.core:core:1.13.1'
     implementation 'com.google.android.material:material:1.12.0'
 }
+

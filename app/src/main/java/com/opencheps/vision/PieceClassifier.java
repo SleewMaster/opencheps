@@ -167,7 +167,7 @@ public class PieceClassifier {
 
     private SquareSampler.Sample[] sampleAll(Bitmap bmp, BoardDetector.Board board) {
         if (board.square < 8) return null;
-        int rad = Math.max(4, (int) (board.square * 0.32f));
+        int rad = Math.max(4, (int) (board.square * 0.42f));
         SquareSampler.Sample[] samples = new SquareSampler.Sample[64];
         for (int r = 0; r < 8; r++) {
             for (int f = 0; f < 8; f++) {
@@ -209,6 +209,27 @@ public class PieceClassifier {
         return bestC;
     }
 
+    /** Costs for all 13 labels, without guessing the piece type first. */
+    public synchronized float[][] labelCosts(Bitmap bmp, BoardDetector.Board board) {
+        if(!trained)return null;
+        SquareSampler.Sample[] samples=sampleAll(bmp,board);
+        if(samples==null)return null;
+        float[][] costs=new float[64][VisualMoveTracker.PIECES.length()];
+        for(int i=0;i<64;i++) {
+            float empty=0; for(float v:samples[i].feature)empty+=v*v;
+            costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
+            for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
+                char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;
+                for(int k=0;k<64;k++)if(labels[k]==wanted) {
+                    float d=SquareSampler.lumDistance(samples[i].feature,templates[k].feature)/SquareSampler.N/SquareSampler.N;
+                    if(d<best)best=d;
+                }
+                costs[i][j]=best;
+            }
+        }
+        return costs;
+    }
+
     public synchronized void reset() {
         templates = null;
         labels = null;
@@ -218,3 +239,4 @@ public class PieceClassifier {
         bootstrapSide = null;
     }
 }
+

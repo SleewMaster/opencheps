@@ -154,7 +154,7 @@ public class FloatingPanel {
             int h = root.getHeight();
             if (h <= 0) h = 180;
             lp.x = 16;
-            lp.y = Math.max(40, screenHeight - h - 200);
+            lp.y = Math.max(50, screenHeight / 12);
             try { wm.updateViewLayout(root, lp); } catch (Exception ignored) {}
         });
     }
@@ -176,3 +176,4 @@ public class FloatingPanel {
         }
     }
 }
+

@@ -1,15 +1,21 @@
 <resources>
-    <string name="app_name">OpenCheps</string>
-    <string name="tagline">Screen-watching chess assistant • Stockfish 18</string>
-    <string name="start">Start Watching</string>
-    <string name="stop">Stop</string>
-    <string name="grant_overlay">Grant Overlay Permission</string>
-    <string name="overlay_granted">Overlay granted ✓</string>
-    <string name="status_idle">Idle</string>
-    <string name="status_running">Watching — see floating panel</string>
-    <string name="notif_channel">OpenCheps Service</string>
-    <string name="notif_title">OpenCheps is watching</string>
-    <string name="notif_text">Tap Stop on the floating panel to end the session</string>
-    <string name="how_it_works">How auto-detection works</string>
-    <string name="how_it_works_body">1. Pick your colour above.\n2. Open chess app on STARTING position.\n3. Tap Start Watching, accept both prompts.\n4. App locates the board and learns piece templates.\n5. Arrows appear only on YOUR turn.\n6. If position glitches: tap recalibrate on the floating panel.</string>
+    <string name="app_name">OpenCheps Bot</string>
+    <string name="tagline">Тренировка с ботами · Stockfish 18</string>
+    <string name="start">Начать анализ</string>
+    <string name="stop">Остановить</string>
+    <string name="grant_overlay">Разрешить поверх других приложений</string>
+    <string name="overlay_granted">Наложение разрешено ✓</string>
+    <string name="status_idle">Готов к запуску</string>
+    <string name="status_running">Анализ включён · открой доску</string>
+    <string name="notif_channel">Анализ шахмат</string>
+    <string name="notif_title">OpenCheps Bot работает</string>
+    <string name="notif_text">Для завершения нажми крестик на панели</string>
+    <string name="how_it_works">Перед новой партией с ботом</string>
+    <string name="how_it_works_body">1. Выбери свой цвет.
+2. Разреши наложение и захват ВСЕГО экрана.
+3. Открой новую партию с ботом и дождись подсказки до первого хода.
+4. Панель не должна закрывать клетки.
+5. Зелёная стрелка показывает лучший ход.
+6. Кнопка ↻ начинает калибровку новой партии.
+7. Если позиция непонятна, подсказка скрывается. Для калибровки нужна начальная расстановка.</string>
 </resources>

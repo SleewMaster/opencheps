@@ -1,189 +1,100 @@
 package com.opencheps.vision;
 
 import android.graphics.Bitmap;
-import android.util.Log;
+import java.util.ArrayList;
+import java.util.List;
 
+/** Find the actual flat-colour board footprint, then verify all 64 squares.
+ * Unlike a checker contrast maximum this cannot slide a rank into the UI. */
 public class BoardDetector {
-
     public static class Board {
         public final int left, top, side;
         public final float square;
         public final double confidence;
         public Board(int left, int top, int side, double confidence) {
-            this.left = left; this.top = top; this.side = side;
-            this.square = side / 8f;
-            this.confidence = confidence;
+            this.left=left; this.top=top; this.side=side;
+            this.square=side/8f; this.confidence=confidence;
         }
     }
-
-    private static final String TAG = "OC/Detector";
-    private static final int WORK_MAX_EDGE = 360;
-    private static final double ACCEPT_THRESHOLD = 18.0;
-
     public static Board locate(Bitmap src) {
-        if (src == null) return null;
-        long t0 = System.nanoTime();
-
-        int W0 = src.getWidth(), H0 = src.getHeight();
-        float scale = (float) WORK_MAX_EDGE / Math.max(W0, H0);
-        int W = Math.max(64, Math.round(W0 * scale));
-        int H = Math.max(64, Math.round(H0 * scale));
-
-        Bitmap work = (scale < 0.999f)
-                ? Bitmap.createScaledBitmap(src, W, H, true)
-                : src;
-
-        int[] argb = new int[W * H];
-        work.getPixels(argb, 0, W, 0, 0, W, H);
-        if (work != src) work.recycle();
-
-        int[] gray = new int[W * H];
-        for (int i = 0; i < gray.length; i++) {
-            int p = argb[i];
-            int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
-            gray[i] = (r * 299 + g * 587 + b * 114) / 1000;
+        if (src==null) return null;
+        float scale=Math.min(1f,800f/Math.max(src.getWidth(),src.getHeight()));
+        int w=Math.round(src.getWidth()*scale), h=Math.round(src.getHeight()*scale);
+        Bitmap small=scale<1 ? Bitmap.createScaledBitmap(src,w,h,true) : src;
+        int[] px=new int[w*h]; small.getPixels(px,0,w,0,0,w,h);
+        if(small!=src) small.recycle();
+        int[] hist=new int[32768];
+        for(int p:px) hist[(((p>>19)&31)<<10)|(((p>>11)&31)<<5)|((p>>3)&31)]++;
+        List<Integer> colors=new ArrayList<>();
+        for(int k=0;k<24 && colors.size()<10;k++) {
+            int best=0;
+            for(int i=1;i<hist.length;i++) if(hist[i]>hist[best]) best=i;
+            if(hist[best]<px.length/250) break;
+            int color=0xff000000|(((best>>10)*8+4)<<16)|((((best>>5)&31)*8+4)<<8)|((best&31)*8+4);
+            hist[best]=0;
+            boolean distinct=true;
+            for(int c:colors) if(distance(c,color)<45*45) distinct=false;
+            if(distinct) colors.add(color);
         }
-
-        int Wp = W + 1;
-        long[] ii = new long[Wp * (H + 1)];
-        for (int y = 0; y < H; y++) {
-            long row = 0;
-            int srcBase = y * W;
-            int dstBase = (y + 1) * Wp;
-            int prevBase = y * Wp;
-            for (int x = 0; x < W; x++) {
-                row += gray[srcBase + x];
-                ii[dstBase + x + 1] = ii[prevBase + x + 1] + row;
+        Board winner=null; double bestScore=0;
+        for(int a=0;a<colors.size();a++) for(int b=a+1;b<colors.size();b++) {
+            int ca=colors.get(a), cb=colors.get(b);
+            if(distance(ca,cb)<65*65) continue;
+            int[] rows=new int[h]; byte[] mask=new byte[w*h];
+            for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
+                int p=px[y*w+x];
+                int da=distance(p,ca), db=distance(p,cb);
+                if(Math.min(da,db)<28*28) { mask[y*w+x]=(byte)(da<db?1:2); rows[y]++; }
             }
-        }
-
-        int minSide = Math.max(80, Math.min(W, H) / 3);
-        int maxSide = (int) (Math.min(W, H) * 0.98);
-
-        Candidate best = null;
-
-        int sizeStep = Math.max(4, (maxSide - minSide) / 24);
-        for (int s = minSide; s <= maxSide; s += sizeStep) {
-            int cell = s / 8;
-            if (cell < 5) continue;
-            int corrected = cell * 8;
-            int posStep = Math.max(3, cell / 2);
-            for (int y = 0; y + corrected < H; y += posStep) {
-                for (int x = 0; x + corrected < W; x += posStep) {
-                    double score = checkerScore(ii, Wp, x, y, cell);
-                    if (best == null || score > best.score) {
-                        best = new Candidate(x, y, corrected, cell, score);
+            // Each real board row contains background even with pieces/highlights.
+            int y=0;
+            while(y<h) {
+                while(y<h && rows[y]<w*.22) y++;
+                int top=y;
+                int lastGood=y;
+                while(y<h) {
+                    if(rows[y]>=w*.22) lastGood=y;
+                    else if(y-lastGood>4) break;
+                    y++;
+                }
+                int bottom=lastGood+1, height=bottom-top;
+                if(height<w*.30) continue;
+                int[] cols=new int[w];
+                for(int yy=top;yy<bottom;yy++) for(int x=0;x<w;x++) if(mask[yy*w+x]!=0) cols[x]++;
+                int left=0,right=w;
+                while(left<w && cols[left]<height*.24) left++;
+                while(right>left && cols[right-1]<height*.24) right--;
+                int width=right-left;
+                if(width<w*.30 || Math.abs(width-height)>Math.max(width,height)*.065) continue;
+                int side=Math.round((width+height)/2f);
+                if(left+side>w+2 || top+side>h+2) continue;
+                side=Math.min(side,Math.min(w-left,h-top));
+                // Robust corner vote, excluding piece centres and coordinates.
+                double matches=0, reverse=0; int total=0;
+                float[] offsets={.10f,.22f,.78f,.90f};
+                for(int r=0;r<8;r++) for(int f=0;f<8;f++) {
+                    int one=0,two=0;
+                    for(float oy:offsets) for(float ox:offsets) {
+                        int xx=Math.min(w-1,Math.round(left+(f+ox)*side/8f));
+                        int yy=Math.min(h-1,Math.round(top+(r+oy)*side/8f));
+                        byte m=mask[yy*w+xx]; if(m==1) one++; if(m==2) two++;
                     }
+                    if(((r+f)&1)==0) {matches+=one;reverse+=two;} else {matches+=two;reverse+=one;}
+                    total+=16;
+                }
+                double ratio=Math.max(matches,reverse)/total;
+                if(ratio<.62) continue;
+                double score=ratio*ratio*side;
+                if(score>bestScore) {
+                    bestScore=score;
+                    winner=new Board(Math.round(left/scale),Math.round(top/scale),Math.round(side/scale),ratio);
                 }
             }
         }
-
-        if (best == null) return null;
-
-        Candidate refined = refine(ii, Wp, W, H, best);
-
-        long elapsed = (System.nanoTime() - t0) / 1_000_000;
-        Log.d(TAG, "locate: " + W + "x" + H + " best=" + refined.score
-                + " bbox=(" + refined.x + "," + refined.y + ",s=" + refined.side + ")"
-                + " in " + elapsed + " ms");
-
-        if (refined.score < ACCEPT_THRESHOLD) return null;
-
-        int left = Math.round(refined.x / scale);
-        int top  = Math.round(refined.y / scale);
-        int side = Math.round(refined.side / scale);
-        return new Board(left, top, side, refined.score);
+        return winner;
     }
-
-    private static Candidate refine(long[] ii, int Wp, int W, int H, Candidate c) {
-        Candidate best = c;
-        int cell = c.cell;
-        for (int dy = -cell; dy <= cell; dy += 2) {
-            for (int dx = -cell; dx <= cell; dx += 2) {
-                int x = c.x + dx, y = c.y + dy;
-                if (x < 0 || y < 0 || x + c.side >= W || y + c.side >= H) continue;
-                double sc = checkerScore(ii, Wp, x, y, cell);
-                if (sc > best.score) best = new Candidate(x, y, c.side, cell, sc);
-            }
-        }
-        for (int ds = -cell / 4; ds <= cell / 4; ds += 2) {
-            int newCell = cell + ds / 8;
-            if (newCell < 5) continue;
-            int newSide = newCell * 8;
-            int x = best.x, y = best.y;
-            if (x + newSide >= W || y + newSide >= H) continue;
-            double sc = checkerScore(ii, Wp, x, y, newCell);
-            if (sc > best.score) best = new Candidate(x, y, newSide, newCell, sc);
-        }
-        return best;
-    }
-
-    private static double checkerScore(long[] ii, int Wp, int x0, int y0, int cell) {
-        int samp = Math.max(2, cell / 5);
-        int inset = Math.max(2, cell / 6);
-
-        double[] light = new double[32];
-        double[] dark  = new double[32];
-        int li = 0, di = 0;
-
-        double[] corners = new double[4];
-
-        for (int r = 0; r < 8; r++) {
-            for (int f = 0; f < 8; f++) {
-                int cx = x0 + f * cell;
-                int cy = y0 + r * cell;
-
-                corners[0] = boxMean(ii, Wp, cx + inset,                cy + inset,                samp);
-                corners[1] = boxMean(ii, Wp, cx + cell - inset - samp,  cy + inset,                samp);
-                corners[2] = boxMean(ii, Wp, cx + inset,                cy + cell - inset - samp,  samp);
-                corners[3] = boxMean(ii, Wp, cx + cell - inset - samp,  cy + cell - inset - samp,  samp);
-
-                sort4(corners);
-                double median = (corners[1] + corners[2]) * 0.5;
-
-                if (((r + f) & 1) == 0) light[li++] = median;
-                else                    dark[di++]  = median;
-            }
-        }
-
-        double meanL = mean(light), meanD = mean(dark);
-        double sigmaL = std(light, meanL), sigmaD = std(dark, meanD);
-
-        double sep = Math.abs(meanL - meanD);
-        double noiseFloor = 4.0;
-        return sep * sep / (noiseFloor + sigmaL + sigmaD);
-    }
-
-    private static void sort4(double[] a) {
-        double t;
-        if (a[0] > a[1]) { t = a[0]; a[0] = a[1]; a[1] = t; }
-        if (a[2] > a[3]) { t = a[2]; a[2] = a[3]; a[3] = t; }
-        if (a[0] > a[2]) { t = a[0]; a[0] = a[2]; a[2] = t; }
-        if (a[1] > a[3]) { t = a[1]; a[1] = a[3]; a[3] = t; }
-        if (a[1] > a[2]) { t = a[1]; a[1] = a[2]; a[2] = t; }
-    }
-
-    private static double mean(double[] a) {
-        double s = 0; for (double v : a) s += v; return s / a.length;
-    }
-
-    private static double std(double[] a, double m) {
-        double s = 0;
-        for (double v : a) { double d = v - m; s += d * d; }
-        return Math.sqrt(s / a.length);
-    }
-
-    private static double boxMean(long[] ii, int Wp, int x, int y, int s) {
-        int x2 = x + s, y2 = y + s;
-        long sum = ii[y2 * Wp + x2] - ii[y * Wp + x2] - ii[y2 * Wp + x] + ii[y * Wp + x];
-        return (double) sum / (s * s);
-    }
-
-    private static final class Candidate {
-        final int x, y, side, cell;
-        final double score;
-        Candidate(int x, int y, int side, int cell, double score) {
-            this.x = x; this.y = y; this.side = side; this.cell = cell; this.score = score;
-        }
+    private static int distance(int a,int b) {
+        int r=((a>>16)&255)-((b>>16)&255),g=((a>>8)&255)-((b>>8)&255),bl=(a&255)-(b&255);
+        return r*r+g*g+bl*bl;
     }
 }

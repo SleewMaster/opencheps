@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, bot-vision-fix ]
   workflow_dispatch:
 
 jobs:
@@ -97,3 +97,4 @@ jobs:
           name: opencheps-armeabi-v7a-debug
           path: app/build/outputs/apk/debug/*armeabi-v7a*.apk
           if-no-files-found: error
+

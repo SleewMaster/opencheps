@@ -22,6 +22,7 @@ public class Prefs {
         get(c).edit().putString(KEY_USER_SIDE, side).apply();
     }
 
-    public static int thinkMs(Context c) { return get(c).getInt(KEY_THINK_MS, 1500); }
-    public static int multiPv(Context c) { return get(c).getInt(KEY_MULTIPV, 3); }
+    public static int thinkMs(Context c) { return Math.max(500,Math.min(15000,get(c).getInt(KEY_THINK_MS, 8000))); }
+    public static int multiPv(Context c) { return Math.max(1,Math.min(3,get(c).getInt(KEY_MULTIPV, 1))); }
 }
+

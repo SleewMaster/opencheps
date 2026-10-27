@@ -36,6 +36,15 @@ public class SquareSampler {
         bmp.getPixels(px, 0, w, x0, y0, w, h);
 
         float[] lumGrid = new float[N * N];
+        float[] shape = new float[N * N * 2];
+        float[] bg=new float[3];
+        for(int c=0;c<3;c++) {
+            int shift=(2-c)*8;
+            int[] vals=new int[2*w+2*h];int n=0;
+            for(int x=0;x<w;x++){vals[n++]=(px[x]>>shift)&255;vals[n++]=(px[(h-1)*w+x]>>shift)&255;}
+            for(int y=0;y<h;y++){vals[n++]=(px[y*w]>>shift)&255;vals[n++]=(px[y*w+w-1]>>shift)&255;}
+            java.util.Arrays.sort(vals); bg[c]=vals[n/2]/255f;
+        }
         float sR = 0, sG = 0, sB = 0;
         int count = N * N;
         for (int y = 0; y < N; y++) {
@@ -48,6 +57,11 @@ public class SquareSampler {
                 float gf = ((p >> 8)  & 0xFF) / 255f;
                 float bf = ( p        & 0xFF) / 255f;
                 lumGrid[y * N + x] = 0.299f * rf + 0.587f * gf + 0.114f * bf;
+                float contrast=Math.max(Math.abs(rf-bg[0]),Math.max(Math.abs(gf-bg[1]),Math.abs(bf-bg[2])));
+                float ink=Math.min(1f,Math.max(0f,(contrast-.045f)/.10f));
+                float l=lumGrid[y*N+x];
+                shape[(y*N+x)*2]=ink*l;
+                shape[(y*N+x)*2+1]=ink*(1-l);
                 sR += rf; sG += gf; sB += bf;
             }
         }
@@ -65,7 +79,7 @@ public class SquareSampler {
         }
         edge /= (N - 2) * (N - 2);
 
-        return new Sample(lumGrid, mR, mG, mB, meanLum, (float) Math.sqrt(edge));
+        return new Sample(shape, mR, mG, mB, meanLum, (float) Math.sqrt(edge));
     }
 
     public static float lumDistance(float[] a, float[] b) {
@@ -78,3 +92,4 @@ public class SquareSampler {
         return s;
     }
 }
+

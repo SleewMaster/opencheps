@@ -71,16 +71,16 @@ public class MainActivity extends AppCompatActivity {
         sideBlack  = findViewById(R.id.sideBlack);
 
         SharedPreferences sp = Prefs.get(this);
-        int think = sp.getInt(Prefs.KEY_THINK_MS, 1500);
-        int pv    = sp.getInt(Prefs.KEY_MULTIPV, 3);
+        int think = Prefs.thinkMs(this);
+        int pv    = Prefs.multiPv(this);
         String side = sp.getString(Prefs.KEY_USER_SIDE, "w");
 
-        thinkBar.setMax(5000);
+        thinkBar.setMax(15000);
         thinkBar.setProgress(think);
         multiPvBar.setMax(2);
         multiPvBar.setProgress(pv - 1);
         thinkTv.setText(thinkLabelText(think));
-        multiPvTv.setText("Arrows to show: " + pv);
+        multiPvTv.setText("Стрелок: " + pv);
         if ("b".equals(side)) sideBlack.setChecked(true); else sideWhite.setChecked(true);
 
         thinkBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -95,7 +95,7 @@ public class MainActivity extends AppCompatActivity {
         multiPvBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar b, int v, boolean u) {
                 int n = v + 1;
-                multiPvTv.setText("Arrows to show: " + n);
+                multiPvTv.setText("Стрелок: " + n);
                 sp.edit().putInt(Prefs.KEY_MULTIPV, n).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar b) {}
@@ -129,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
         else if (ms < 2000) strength = "balanced";
         else if (ms < 3500) strength = "deep";
         else                strength = "thorough";
-        return "Analysis time: " + ms + " ms — " + strength;
+        return "Время анализа: " + ms/1000f + " с";
     }
 
     @Override protected void onResume() {
@@ -150,3 +150,4 @@ public class MainActivity extends AppCompatActivity {
 
     private void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }
 }
+

@@ -49,12 +49,12 @@ public class StockfishEngine {
 
         send("uci");
         waitFor("uciok", 6000);
-        send("setoption name Threads value 2");
-        send("setoption name Hash value 48");
+        send("setoption name Threads value "+Math.max(1,Math.min(4,Runtime.getRuntime().availableProcessors()-1)));
+        send("setoption name Hash value 128");
         send("setoption name Move Overhead value 100");
         send("setoption name UCI_LimitStrength value false");
         send("setoption name Ponder value false");
-        setMultiPv(3);
+        setMultiPv(1);
         send("isready");
         waitFor("readyok", 6000);
         ready = true;
@@ -138,3 +138,4 @@ public class StockfishEngine {
         throw new RuntimeException("Timed out waiting for: " + token);
     }
 }
+

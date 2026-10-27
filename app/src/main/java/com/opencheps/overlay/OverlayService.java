@@ -60,6 +60,11 @@ public class OverlayService extends Service {
         super.onDestroy();
     }
 
+    public static void hideArrowsForCapture(boolean hidden) {
+        OverlayService s=instance;
+        if(s!=null)s.arrows.post(() -> s.arrows.setVisibility(hidden?android.view.View.INVISIBLE:android.view.View.VISIBLE));
+    }
+
     public static FloatingPanel panel() {
         return instance == null ? null : instance.panel;
     }
@@ -86,3 +91,4 @@ public class OverlayService extends Service {
         if (instance != null) instance.arrows.clearAll();
     }
 }
+
