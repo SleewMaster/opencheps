@@ -20,7 +20,12 @@ public final class CameraBoard {
         Bitmap out=Bitmap.createBitmap(SIZE,SIZE,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(out);canvas.drawColor(Color.BLACK);
         canvas.drawBitmap(source,m,new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG));
-        return out;
+        // Two camera/resampling passes can move a fine piece edge across a sampler pixel.
+        // Consistent low-pass filtering reduces this aliasing and sensor noise, without
+        // relaxing the legal matcher's confidence thresholds.
+        Bitmap small=Bitmap.createScaledBitmap(out,SIZE/2,SIZE/2,true);
+        Bitmap filtered=Bitmap.createScaledBitmap(small,SIZE,SIZE,true);
+        out.recycle();small.recycle();return filtered;
     }
     public ChessPosition read(Bitmap rectified) {
         if(!classifier.isTrained()) {

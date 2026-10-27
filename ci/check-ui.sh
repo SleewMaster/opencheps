@@ -166,7 +166,10 @@ adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionT
 for attempt in $(seq 1 45); do
  result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
  if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
- if [[ "$result" == CAMERA_VISION_FAIL* ]]; then adb logcat -d -s CameraVisionTest:E; echo "$result"; exit 1; fi
+ if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
+  for file in camera-calibration.png camera-failed.png camera-photo.png; do adb exec-out run-as com.opencheps.bottrainer cat files/"$file" > ui-proof/"$file" || true; done
+  adb logcat -d -s CameraVisionTest:E; echo "$result"; exit 1
+ fi
  sleep 1
 done
 [[ "$result" == "CAMERA_VISION_OK 60" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }

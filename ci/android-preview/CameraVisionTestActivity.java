@@ -24,13 +24,26 @@ public class CameraVisionTestActivity extends Activity {
                 Bitmap shot=photograph(raw,corners,ply>0);Bitmap square=CameraBoard.rectify(shot,corners);
                 if(square==null)throw new AssertionError("rectification");
                 ChessPosition first=tracker.read(square),accepted=tracker.read(square);
-                if(first!=null||accepted==null||!java.util.Arrays.deepEquals(accepted.board,canonical))throw new AssertionError("theme="+theme+" flipped="+flipped+" angled="+angled+" ply="+ply+" accepted="+(accepted==null?null:accepted.move));
+                if(ply==0)save(square,"camera-calibration.png");
+                if(first!=null||accepted==null||!java.util.Arrays.deepEquals(accepted.board,canonical)){
+                    save(square,"camera-failed.png");save(shot,"camera-photo.png");
+                    throw new AssertionError("theme="+theme+" flipped="+flipped+" angled="+angled+" ply="+ply+" accepted="+(accepted==null?null:accepted.move)+diagnose(tracker,square,flipped));
+                }
                 raw.recycle();shot.recycle();square.recycle();passed++;
             }
             Bitmap covered=Bitmap.createBitmap(640,640,Bitmap.Config.ARGB_8888);covered.eraseColor(0xff333333);
             if(tracker.read(covered)!=null)throw new AssertionError("covered camera frame accepted");covered.recycle();
         }return passed;
     }
+    private void save(Bitmap b,String name){try(FileOutputStream o=new FileOutputStream(new File(getFilesDir(),name))){b.compress(Bitmap.CompressFormat.PNG,100,o);}catch(IOException e){throw new RuntimeException(e);}}
+    private String diagnose(CameraBoard tracker,Bitmap square,boolean flipped){try{
+        java.lang.reflect.Field cf=CameraBoard.class.getDeclaredField("classifier"),pf=CameraBoard.class.getDeclaredField("position");cf.setAccessible(true);pf.setAccessible(true);
+        PieceClassifier classifier=(PieceClassifier)cf.get(tracker);ChessPosition old=(ChessPosition)pf.get(tracker);
+        float[][] seen=classifier.labelCosts(square,new BoardDetector.Board(0,0,640,1)),costs=new float[64][];for(int i=0;i<64;i++)costs[i]=seen[flipped?63-i:i];
+        java.util.List<ChessPosition> all=new java.util.ArrayList<>();all.add(old);for(ChessPosition p:old.successors()){all.add(p);all.addAll(p.successors());}
+        java.util.TreeMap<Float,String> rank=new java.util.TreeMap<>();for(ChessPosition p:all){float total=0,max=0;int cell=0;for(int i=0;i<64;i++){float c=costs[i][VisualMoveTracker.PIECES.indexOf(p.board[i/8][i%8])];total+=c;if(c>max){max=c;cell=i;}}rank.put(total,p.move+" mean="+total/64+" max="+max+" cell="+ChessPosition.square(cell/8,cell%8));}
+        StringBuilder out=new StringBuilder();for(int i=0;i<4&&!rank.isEmpty();i++)out.append(" | ").append(rank.pollFirstEntry());return out.toString();
+    }catch(Exception e){return "diagnostic error "+e;}}
     private Bitmap photograph(Bitmap source,float[] corners,boolean changedLighting){
         Bitmap shot=Bitmap.createBitmap(800,840,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(shot);c.drawColor(0xff121820);
         Matrix m=new Matrix();m.setPolyToPoly(new float[]{0,0,640,0,640,640,0,640},0,corners,0,4);
