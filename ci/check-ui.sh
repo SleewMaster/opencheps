@@ -17,7 +17,12 @@ root=E.parse('ui-proof/main.xml');nodes=list(root.iter('node'))
 assert any('Твой следующий' in n.get('text','') for n in nodes)
 cta=next(n for n in nodes if n.get('resource-id','').endswith('/btnStart'))
 assert cta.get('enabled')=='true'
-button=next(n for n in nodes if n.get('resource-id','').endswith('/modeDeep'))
+button=next((n for n in nodes if n.get('resource-id','').endswith('/modeDeep')),None)
+if button is None:
+    subprocess.run(['adb','shell','input','swipe','360','950','360','450','300'],check=True)
+    subprocess.run(['adb','shell','uiautomator','dump','/sdcard/scrolled.xml'],check=True)
+    xml=subprocess.check_output(['adb','shell','cat','/sdcard/scrolled.xml']).decode()
+    button=next(n for n in E.fromstring(xml).iter('node') if n.get('resource-id','').endswith('/modeDeep'))
 x1,y1,x2,y2=map(int,re.findall(r'\d+',button.attrib['bounds']))
 subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PY
@@ -106,3 +111,62 @@ done
 [[ "$result" == "VISION_OK 20" ]] || { adb logcat -d -s NativeVisionCheck:E; echo "Missing vision result: $result"; exit 1; }
 echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
+
+# Camera mode launches from the actual source selector with no projection consent.
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
+adb shell input swipe 360 350 360 1100 300
+adb shell uiautomator dump /sdcard/sources.xml
+adb pull /sdcard/sources.xml ui-proof/sources.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/sources.xml').iter('node'))
+b=next(n for n in nodes if n.get('resource-id','').endswith('/sourceCamera'))
+x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
+subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+b=next(n for n in nodes if n.get('resource-id','').endswith('/btnStart'))
+x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
+subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYUI
+for attempt in $(seq 1 20); do
+  if adb logcat -d -s OC/Camera:I | grep -q CAMERA_STREAMING; then break; fi
+  sleep 1
+done
+adb logcat -d -s OC/Camera:I | grep CAMERA_STREAMING
+adb shell uiautomator dump /sdcard/camera.xml
+adb pull /sdcard/camera.xml ui-proof/camera.xml
+adb exec-out screencap -p > ui-proof/camera.png
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/camera.xml').iter('node'))
+assert any('КАМЕРА  /  LIVE'==n.get('text') for n in nodes)
+assert not any('media_projection' in n.get('resource-id','') for n in nodes)
+def click(label):
+ b=next(n for n in nodes if n.get('text')==label);x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+click('Начать')
+PYUI
+sleep 2
+adb shell uiautomator dump /sdcard/calibrating.xml
+adb pull /sdcard/calibrating.xml ui-proof/calibrating.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/calibrating.xml').iter('node'))
+assert any(n.get('text')=='Углы заново' for n in nodes),'camera Start did not apply corners'
+b=next(n for n in nodes if n.get('text')=='Закрыть');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYUI
+adb shell uiautomator dump /sdcard/camera-closed.xml
+adb pull /sdcard/camera-closed.xml ui-proof/camera-closed.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E
+nodes=list(E.parse('ui-proof/camera-closed.xml').iter('node'))
+assert any(n.get('resource-id','').endswith('/sourceCamera') and n.get('checked')=='true' for n in nodes),'camera did not return to saved source choice'
+assert not any(n.get('text')=='КАМЕРА  /  LIVE' for n in nodes)
+PYUI
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
+for attempt in $(seq 1 45); do
+ result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
+ if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
+ if [[ "$result" == CAMERA_VISION_FAIL* ]]; then adb logcat -d -s CameraVisionTest:E; echo "$result"; exit 1; fi
+ sleep 1
+done
+[[ "$result" == "CAMERA_VISION_OK 60" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+echo "$result"

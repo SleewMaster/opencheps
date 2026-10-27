@@ -31,6 +31,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView statusTv, thinkTv, multiPvTv;
     private SeekBar thinkBar, multiPvBar;
     private RadioGroup sideGroup;
+    private RadioGroup sourceGroup;
+    private RadioButton sourceCamera;
     private RadioButton sideWhite, sideBlack;
     private MediaProjectionManager mpm;
 
@@ -70,8 +72,15 @@ public class MainActivity extends AppCompatActivity {
         sideGroup  = findViewById(R.id.sideGroup);
         sideWhite  = findViewById(R.id.sideWhite);
         sideBlack  = findViewById(R.id.sideBlack);
+        sourceGroup=findViewById(R.id.sourceGroup);
+        sourceCamera=findViewById(R.id.sourceCamera);
 
         SharedPreferences sp = Prefs.get(this);
+        if(sp.getBoolean("camera_mode",false))sourceCamera.setChecked(true);
+        sourceGroup.setOnCheckedChangeListener((g,id)->{
+            sp.edit().putBoolean("camera_mode",id==R.id.sourceCamera).apply();renderSource();
+        });
+        renderSource();
         int think = Prefs.thinkMs(this);
         int pv    = Prefs.multiPv(this);
         String side = sp.getString(Prefs.KEY_USER_SIDE, "w");
@@ -117,6 +126,9 @@ public class MainActivity extends AppCompatActivity {
 
         btnOverlay.setOnClickListener(v -> requestOverlay());
         btnStart.setOnClickListener(v -> {
+            if(sourceCamera.isChecked()){
+                startActivity(new Intent(this,com.opencheps.camera.CameraActivity.class));return;
+            }
             if (!Settings.canDrawOverlays(this)) { requestOverlay(); return; }
             projectionLauncher.launch(Build.VERSION.SDK_INT>=34
                     ?mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
@@ -154,7 +166,7 @@ public class MainActivity extends AppCompatActivity {
         btnOverlay.setText(overlay
                 ? getString(R.string.overlay_granted)
                 : getString(R.string.grant_overlay));
-        btnStart.setEnabled(!ScreenCaptureService.isRunning);
+        renderSource();
         btnStop.setEnabled(ScreenCaptureService.isRunning);
         statusTv.setText(ScreenCaptureService.isRunning?R.string.status_running:R.string.status_idle);
     }
@@ -163,6 +175,13 @@ public class MainActivity extends AppCompatActivity {
         Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:" + getPackageName()));
         startActivity(i);
+    }
+
+    private void renderSource(){
+        boolean camera=sourceCamera.isChecked();
+        btnOverlay.setVisibility(camera?View.GONE:View.VISIBLE);
+        btnStart.setText(camera?"Открыть камеру   ↗":"Начать захват экрана   ↗");
+        btnStart.setEnabled(camera||!ScreenCaptureService.isRunning);
     }
 
     private void toast(String m) { Toast.makeText(this, m, Toast.LENGTH_SHORT).show(); }

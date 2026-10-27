@@ -42,7 +42,7 @@ public final class NativeVisionCheck {
    });
   }catch(Throwable t){fail(activity,result,t);}
  }
- private static Bitmap render(int w,int h,float top,char[][] grid,int[] colors){
+ static Bitmap render(int w,int h,float top,char[][] grid,int[] colors){
   Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(bmp);c.drawColor(0xff0b121e);Paint p=new Paint(3);float cell=w/8f;
   for(int r=0;r<8;r++)for(int f=0;f<8;f++){p.setColor(colors[(r+f)&1]);c.drawRect(f*cell,top+r*cell,(f+1)*cell,top+(r+1)*cell,p);}
   String keys="KQRBNPkqrbnp",glyphs="♔♕♖♗♘♙♚♛♜♝♞♟";p.setTypeface(Typeface.DEFAULT);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(cell*.74f);
