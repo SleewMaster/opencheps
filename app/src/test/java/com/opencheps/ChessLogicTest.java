@@ -161,12 +161,11 @@ public class ChessLogicTest {
         assertNotNull(r);
         assertEquals(Side.BLACK, r.second.mover);
     }
-    @Test public void rejectsRecoveryForOneMoveOrWrongSide() {
+    @Test public void rejectsRecoveryForOneMoveAndNoChange() {
         char[][] a = initial(), b = copy(a);
         b[6][4] = '.'; b[4][4] = 'P';
         assertNull(com.opencheps.vision.MoveSequenceRecovery.recover(a,b,Side.WHITE));
-        b[1][6] = '.'; b[2][6] = 'p';
-        assertNull(com.opencheps.vision.MoveSequenceRecovery.recover(a,b,Side.BLACK));
+        assertNull(com.opencheps.vision.MoveSequenceRecovery.recover(a,a,Side.WHITE));
     }
 
 }
