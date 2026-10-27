@@ -143,14 +143,14 @@
 
         <TextView
             android:id="@+id/thinkLabel"
-            android:text="Think time: 1500 ms — strong (≈3000 elo)"
+            android:text="Analysis time: 1500 ms — balanced"
             android:textColor="#FFFFFFFF"
             android:paddingTop="20dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
 
         <TextView
-            android:text="Longer = stronger play but slower response. Stockfish 18 reaches ≈3300 elo at 2 s on 2 cores."
+            android:text="More time allows deeper analysis, but uses more battery. Accuracy also depends on correctly reading the board."
             android:textColor="#FFB0BEC5"
             android:textSize="11sp"
             android:layout_width="match_parent"
