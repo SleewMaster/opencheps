@@ -1,8 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <style name="Theme.OpenCheps" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#1B5E20</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="android:windowBackground">#FF0D1F12</item>
+    <style name="Theme.OpenCheps" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#B9F66E</item>
+        <item name="colorOnPrimary">#101925</item>
+        <item name="colorSecondary">#67D7FF</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">#0B121E</item>
+        <item name="android:statusBarColor">#0B121E</item>
+        <item name="android:navigationBarColor">#0B121E</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
-

@@ -57,8 +57,8 @@ public class FloatingPanel {
         toggleBtn.setOnClickListener(v -> {
             paused = !paused;
             toggleBtn.setImageResource(paused
-                    ? android.R.drawable.ic_media_play
-                    : android.R.drawable.ic_media_pause);
+                    ? R.drawable.ic_play
+                    : R.drawable.ic_pause);
             if (listener != null) listener.onPauseToggle(paused);
         });
         stopBtn.setOnClickListener(v -> {
@@ -129,14 +129,14 @@ public class FloatingPanel {
         sideWhiteTv.post(() -> {
             if (userSide == Side.WHITE) {
                 sideWhiteTv.setBackgroundResource(R.drawable.pill_white);
-                sideWhiteTv.setTextColor(0xFF000000);
+                sideWhiteTv.setTextColor(0xFF101925);
                 sideBlackTv.setBackgroundResource(R.drawable.pill_unselected);
-                sideBlackTv.setTextColor(0xFFCCCCCC);
+                sideBlackTv.setTextColor(0xFF91A9C8);
             } else {
                 sideBlackTv.setBackgroundResource(R.drawable.pill_black);
                 sideBlackTv.setTextColor(0xFFFFFFFF);
                 sideWhiteTv.setBackgroundResource(R.drawable.pill_unselected);
-                sideWhiteTv.setTextColor(0xFFCCCCCC);
+                sideWhiteTv.setTextColor(0xFF91A9C8);
             }
         });
     }
@@ -153,7 +153,7 @@ public class FloatingPanel {
         root.post(() -> {
             int h = root.getHeight();
             if (h <= 0) h = 180;
-            lp.x = 16;
+            lp.x = Math.max(12, (screenWidth-root.getWidth())/2);
             lp.y = Math.max(50, screenHeight / 12);
             try { wm.updateViewLayout(root, lp); } catch (Exception ignored) {}
         });

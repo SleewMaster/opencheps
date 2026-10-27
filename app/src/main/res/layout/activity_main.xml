@@ -1,195 +1,47 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:background="#FF0D1F12">
-
-    <LinearLayout
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
-        <LinearLayout
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <ImageView
-                android:src="@mipmap/ic_launcher"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:contentDescription="OpenCheps"/>
-
-            <LinearLayout
-                android:orientation="vertical"
-                android:paddingStart="14dp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
-
-                <TextView
-                    android:text="@string/app_name"
-                    android:textColor="#FFFFFFFF"
-                    android:textSize="28sp"
-                    android:textStyle="bold"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"/>
-
-                <TextView
-                    android:text="@string/tagline"
-                    android:textColor="#FFA5D6A7"
-                    android:textSize="13sp"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"/>
+<?xml version='1.0' encoding='utf-8'?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0B121E">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:background="#0B121E" android:layout_marginBottom="90dp">
+        <LinearLayout android:orientation="vertical" android:padding="22dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <TextView android:text="OPEN CHEPS" android:textSize="12sp" android:textColor="#93A8C3" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.2" android:fontFamily="sans-serif-medium" />
+            <LinearLayout android:orientation="vertical" android:padding="22dp" android:background="@drawable/hero_bg" android:layout_marginTop="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <ImageView android:src="@drawable/ic_crown" android:contentDescription="Шахматная корона" android:layout_width="36dp" android:layout_height="36dp" />
+                <TextView android:text="Твой следующий&#10;сильный ход." android:textSize="30sp" android:textColor="#EAF2FF" android:layout_width="match_parent" android:layout_height="wrap_content" android:textStyle="bold" android:lineSpacingExtra="2dp" android:layout_marginTop="14dp" />
+                <TextView android:text="Тренируйся с ботами. Видь больше." android:textSize="13sp" android:textColor="#A4B7D1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" />
+                <TextView android:text="STOCKFISH 18  ·  LIVE" android:textSize="10sp" android:textColor="#B9F66E" android:layout_width="match_parent" android:layout_height="wrap_content" android:fontFamily="sans-serif-medium" android:layout_marginTop="18dp" android:letterSpacing="0.08" />
             </LinearLayout>
+            <LinearLayout android:orientation="vertical" android:padding="18dp" android:layout_marginTop="14dp" android:background="@drawable/surface_card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:text="01  /  ТВОЯ СТОРОНА" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.08" />
+                <RadioGroup android:id="@+id/sideGroup" android:orientation="horizontal" android:layout_marginTop="14dp" android:layout_width="match_parent" android:layout_height="50dp">
+                    <RadioButton android:id="@+id/sideWhite" android:text="♔  Белые" android:textSize="14sp" android:textStyle="bold" android:textColor="@color/choice_text" android:button="@null" android:gravity="center" android:background="@drawable/choice_bg" android:checked="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="4dp" />
+                    <RadioButton android:id="@+id/sideBlack" android:text="♚  Чёрные" android:textSize="14sp" android:textStyle="bold" android:textColor="@color/choice_text" android:button="@null" android:gravity="center" android:background="@drawable/choice_bg" android:checked="false" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="4dp" />
+                </RadioGroup>
+                <TextView android:text="Твои фигуры должны быть внизу доски." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" />
+            </LinearLayout>
+            <LinearLayout android:orientation="vertical" android:padding="18dp" android:layout_marginTop="14dp" android:background="@drawable/surface_card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:text="02  /  СКОРОСТЬ АНАЛИЗА" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.08" />
+                <LinearLayout android:orientation="horizontal" android:layout_marginTop="14dp" android:layout_width="match_parent" android:layout_height="44dp">
+                    <TextView android:id="@+id/modeFast" android:text="Быстро" android:textSize="12sp" android:gravity="center" android:background="@drawable/pill_unselected" android:textColor="#D8E6F7" android:clickable="true" android:focusable="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="5dp" />
+                    <TextView android:id="@+id/modeBalanced" android:text="Баланс" android:textSize="12sp" android:gravity="center" android:background="@drawable/pill_unselected" android:textColor="#D8E6F7" android:clickable="true" android:focusable="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="5dp" />
+                    <TextView android:id="@+id/modeDeep" android:text="Глубоко" android:textSize="12sp" android:gravity="center" android:background="@drawable/pill_unselected" android:textColor="#D8E6F7" android:clickable="true" android:focusable="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="5dp" />
+                </LinearLayout>
+                <TextView android:text="1,5 с · быстрый режим" android:textSize="16sp" android:textColor="#EAF2FF" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/thinkLabel" android:textStyle="bold" android:layout_marginTop="16dp" />
+                <SeekBar android:id="@+id/thinkBar" android:progressTint="#B9F66E" android:thumbTint="#B9F66E" android:layout_width="match_parent" android:layout_height="40dp" />
+                <TextView android:text="Подсказка появляется во время расчёта и уточняется." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                <TextView android:text="Одна стрелка · лучший ход" android:textSize="13sp" android:textColor="#D8E6F7" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/multiPvLabel" android:layout_marginTop="16dp" />
+                <SeekBar android:id="@+id/multiPvBar" android:progressTint="#67D7FF" android:thumbTint="#67D7FF" android:layout_width="match_parent" android:layout_height="36dp" />
+            </LinearLayout>
+            <LinearLayout android:orientation="vertical" android:padding="18dp" android:layout_marginTop="14dp" android:background="@drawable/surface_card" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:text="03  /  ПОДКЛЮЧЕНИЕ" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.08" />
+                <Button android:id="@+id/btnOverlay" android:text="Разрешить поверх приложений" android:textAllCaps="false" android:textStyle="bold" android:textSize="14sp" android:textColor="#DCEBFF" android:backgroundTint="#20334C" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="12dp" />
+                <Button android:id="@+id/btnStop" android:text="Остановить" android:textAllCaps="false" android:textStyle="bold" android:textSize="14sp" android:textColor="#FFB4C1" android:backgroundTint="#2B2432" android:layout_width="match_parent" android:layout_height="56dp" android:enabled="false" />
+            </LinearLayout>
+            <TextView android:text="КАК НАЧАТЬ" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" />
+            <TextView android:text="Новая партия → захват всего экрана → первая подсказка.&#10;Дождись калибровки до первого хода." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:lineSpacingExtra="4dp" />
+            <TextView android:text="OPEN CHEPS  /  BOT TRAINING" android:textSize="10sp" android:textColor="#49607F" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" android:layout_marginBottom="12dp" />
         </LinearLayout>
-
-        <View
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="16dp"
-            android:background="#3300C853"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"/>
-
-        <TextView
-            android:text="Какими фигурами играешь?"
-            android:textColor="#FFFFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:text="Доска должна быть развёрнута твоими фигурами вниз. Подсказка появляется только на твоём ходу."
-            android:textColor="#FFB0BEC5"
-            android:textSize="11sp"
-            android:paddingTop="2dp"
-            android:paddingBottom="8dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <RadioGroup
-            android:id="@+id/sideGroup"
-            android:orientation="horizontal"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-            <RadioButton
-                android:id="@+id/sideWhite"
-                android:text="Белые"
-                android:textColor="#FFFFFFFF"
-                android:checked="true"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-            <RadioButton
-                android:id="@+id/sideBlack"
-                android:text="Чёрные"
-                android:textColor="#FFFFFFFF"
-                android:paddingStart="20dp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-        </RadioGroup>
-
-        <View
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp"
-            android:background="#3300C853"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"/>
-
-        <Button
-            android:id="@+id/btnOverlay"
-            android:text="@string/grant_overlay"
-            android:backgroundTint="#FF1B5E20"
-            android:textColor="#FFFFFFFF"
-            android:layout_marginTop="6dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <Button
-            android:id="@+id/btnStart"
-            android:text="@string/start"
-            android:backgroundTint="#FF00C853"
-            android:textColor="#FF0D1F12"
-            android:textStyle="bold"
-            android:layout_marginTop="14dp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <Button
-            android:id="@+id/btnStop"
-            android:text="@string/stop"
-            android:backgroundTint="#FFD32F2F"
-            android:textColor="#FFFFFFFF"
-            android:layout_marginTop="6dp"
-            android:enabled="false"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:id="@+id/status"
-            android:text="@string/status_idle"
-            android:textColor="#FFA5D6A7"
-            android:paddingTop="16dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <View
-            android:layout_marginTop="20dp"
-            android:background="#3300C853"
-            android:layout_width="match_parent"
-            android:layout_height="1dp"/>
-
-        <TextView
-            android:id="@+id/thinkLabel"
-            android:text="Время анализа: 8 с"
-            android:textColor="#FFFFFFFF"
-            android:paddingTop="20dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:text="Для сильного бота: 8-15 секунд и одна стрелка. Дождись результата перед ходом."
-            android:textColor="#FFB0BEC5"
-            android:textSize="11sp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <SeekBar
-            android:id="@+id/thinkBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:id="@+id/multiPvLabel"
-            android:text="Стрелок: 1"
-            android:textColor="#FFFFFFFF"
-            android:paddingTop="12dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <SeekBar
-            android:id="@+id/multiPvBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:text="@string/how_it_works"
-            android:textColor="#FFFFEB3B"
-            android:textSize="12sp"
-            android:paddingTop="22dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:text="@string/how_it_works_body"
-            android:textColor="#FFB0BEC5"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:paddingTop="4dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+    </ScrollView>
+    <LinearLayout android:orientation="vertical" android:layout_gravity="bottom" android:layout_width="match_parent" android:layout_height="90dp" android:paddingStart="22dp" android:paddingEnd="22dp" android:paddingBottom="8dp" android:background="#0B121E">
+        <Button android:id="@+id/btnStart" android:text="Начать тренировку   ↗" android:textAllCaps="false" android:textStyle="bold" android:textSize="14sp" android:textColor="#101925" android:backgroundTint="#B9F66E" android:layout_width="match_parent" android:layout_height="56dp" />
+        <TextView android:text="Готов к запуску" android:textSize="10sp" android:textColor="#B9F66E" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/status" android:gravity="center" android:layout_marginTop="2dp" />
     </LinearLayout>
-</ScrollView>
-
+</FrameLayout>

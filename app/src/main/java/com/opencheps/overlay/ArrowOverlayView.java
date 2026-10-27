@@ -99,45 +99,52 @@ public class ArrowOverlayView extends View {
     @Override protected void onDraw(Canvas c) {
         int[] origin=new int[2];getLocationOnScreen(origin);
         c.save();c.translate(-origin[0],-origin[1]);
-        if (boardBounds != null) {
-            frame.setColor(boardFrameColor);
-            c.drawRect(boardBounds, frame);
+        if(boardBounds!=null) {
+            frame.setColor((boardFrameColor&0x00ffffff)|0x30000000);
+            frame.setStrokeWidth(2f);c.drawRect(boardBounds,frame);
         }
-        for (Arrow a : arrows) {
-            shadow.setStrokeWidth(a.widthPx + 6f);
-            stroke.setStrokeWidth(a.widthPx);
-            stroke.setColor(a.color);
-            head.setColor(a.color);
-
-            double direction=Math.atan2(a.ey-a.sy,a.ex-a.sx);
-            float shaftX=a.ex-(float)Math.cos(direction)*a.widthPx*1.4f;
-            float shaftY=a.ey-(float)Math.sin(direction)*a.widthPx*1.4f;
-            c.drawLine(a.sx,a.sy,shaftX,shaftY,shadow);
-            c.drawLine(a.sx,a.sy,shaftX,shaftY,stroke);
-
-            double ang = Math.atan2(a.ey - a.sy, a.ex - a.sx);
-            float headLen = a.widthPx * 2.2f;
-            float wing = (float) (Math.PI / 7);
-            float lx = a.ex - (float) (Math.cos(ang - wing) * headLen);
-            float ly = a.ey - (float) (Math.sin(ang - wing) * headLen);
-            float rx = a.ex - (float) (Math.cos(ang + wing) * headLen);
-            float ry = a.ey - (float) (Math.sin(ang + wing) * headLen);
-            headPath.reset();
-            headPath.moveTo(a.ex, a.ey);
-            headPath.lineTo(lx, ly);
-            headPath.lineTo(rx, ry);
-            headPath.close();
-            c.drawPath(headPath, head);
-
-            if (a.label != null) {
-                float tx = (a.sx + a.ex) / 2f;
-                float ty = (a.sy + a.ey) / 2f;
-                float w = label.measureText(a.label) + 18f;
-                c.drawRoundRect(tx - w / 2, ty - 24, tx + w / 2, ty + 14, 10f, 10f, labelBg);
-                c.drawText(a.label, tx - (w - 18f) / 2f, ty + 8f, label);
+        float cell=boardBounds==null?80f:boardBounds.width()/8f;
+        // Alternative moves underneath the primary move.
+        for(int i=arrows.size()-1;i>=0;i--) {
+            Arrow a=arrows.get(i);boolean primary=i==0;
+            float dx=a.ex-a.sx,dy=a.ey-a.sy,len=(float)Math.hypot(dx,dy);
+            if(len<1)continue;
+            float ux=dx/len,uy=dy/len,px=-uy,py=ux;
+            float width=cell*(primary?.105f:.065f), half=width/2f;
+            float headLength=cell*(primary?.33f:.27f),wing=cell*(primary?.185f:.14f);
+            float startX=a.sx+ux*cell*.16f,startY=a.sy+uy*cell*.16f;
+            float neckX=a.ex-ux*headLength,neckY=a.ey-uy*headLength;
+            // The tip is exactly the centre of the destination square.
+            headPath.reset();headPath.moveTo(startX+px*half,startY+py*half);
+            headPath.lineTo(neckX+px*half,neckY+py*half);
+            headPath.lineTo(neckX+px*wing,neckY+py*wing);
+            headPath.lineTo(a.ex,a.ey);
+            headPath.lineTo(neckX-px*wing,neckY-py*wing);
+            headPath.lineTo(neckX-px*half,neckY-py*half);
+            headPath.lineTo(startX-px*half,startY-py*half);headPath.close();
+            head.setColor((a.color&0x00ffffff)|(primary?0x28000000:0x14000000));
+            float inset=cell*.07f,radius=cell*.12f;
+            c.drawRoundRect(a.ex-cell/2+inset,a.ey-cell/2+inset,
+                    a.ex+cell/2-inset,a.ey+cell/2-inset,radius,radius,head);
+            stroke.setColor(a.color);stroke.setStrokeWidth(cell*(primary?.042f:.024f));
+            c.drawRoundRect(a.ex-cell/2+inset,a.ey-cell/2+inset,
+                    a.ex+cell/2-inset,a.ey+cell/2-inset,radius,radius,stroke);
+            shadow.setStrokeWidth(cell*.055f);shadow.setStrokeJoin(Paint.Join.ROUND);shadow.setColor(0xE0101925);
+            c.drawPath(headPath,shadow);head.setColor(a.color);c.drawPath(headPath,head);
+            head.setColor(0xED101925);c.drawCircle(a.sx,a.sy,cell*.14f,head);
+            stroke.setColor(a.color);stroke.setStrokeWidth(cell*.045f);c.drawCircle(a.sx,a.sy,cell*.14f,stroke);
+            head.setColor(a.color);c.drawCircle(a.sx,a.sy,cell*.047f,head);
+            if(primary&&a.label!=null) {
+                String destination=a.label.contains("→")?a.label.substring(a.label.indexOf('→')+1):a.label;
+                destination=destination.toUpperCase(java.util.Locale.ROOT);
+                label.setTextSize(cell*.17f);label.setColor(a.color);
+                float tw=label.measureText(destination),pad=cell*.06f;
+                float bx=a.ex-tw/2-pad,by=a.ey+cell*.24f;
+                labelBg.setColor(0xF0101925);
+                c.drawRoundRect(bx,by,bx+tw+2*pad,by+cell*.23f,cell*.05f,cell*.05f,labelBg);
+                c.drawText(destination,a.ex-tw/2,by+cell*.17f,label);
             }
         }
         c.restore();
     }
 }
-

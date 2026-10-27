@@ -18,13 +18,20 @@ public class StockfishEngine {
         public final String uci;
         public final int cp;
         public final boolean mate;
+        public final int depth;
         public Pv(String uci, int cp, boolean mate) {
-            this.uci = uci; this.cp = cp; this.mate = mate;
+            this(uci,cp,mate,0);
+        }
+        public Pv(String uci,int cp,boolean mate,int depth) {
+            this.uci=uci;this.cp=cp;this.mate=mate;this.depth=depth;
         }
     }
 
     private static final String TAG = "OC/Engine";
 
+    public interface Progress {void onUpdate(List<Pv> moves);}
+    private final Object commands=new Object();
+    private volatile boolean searching;
     private Process proc;
     private BufferedWriter in;
     private BufferedReader out;
@@ -68,51 +75,54 @@ public class StockfishEngine {
         }
     }
 
-    public synchronized List<Pv> topMoves(String fen, int movetimeMs, int multiPv) throws Exception {
-        if (!ready) throw new IllegalStateException("engine not started");
-        setMultiPv(multiPv);
-        // Keep the transposition table between related training positions.
-        send("position fen " + fen);
-        send("go movetime " + movetimeMs);
+    public synchronized List<Pv> topMoves(String fen,int time,int count) throws Exception {
+        return topMoves(fen,time,count,null);
+    }
 
-        String[] bestByIdx = new String[multiPv + 1];
-        int[] cpByIdx = new int[multiPv + 1];
-        boolean[] mateByIdx = new boolean[multiPv + 1];
-
-        String line;
-        while ((line = out.readLine()) != null) {
-            if (line.startsWith("bestmove")) break;
-            if (!line.startsWith("info ") || !line.contains(" pv ")) continue;
-            int idx = 1; int cp = 0; boolean mate = false;
-            String[] tok = line.split("\\s+");
-            String pvMove = null;
-            for (int i = 0; i < tok.length - 1; i++) {
-                switch (tok[i]) {
-                    case "multipv": idx = parseSafe(tok[i + 1], 1); break;
-                    case "cp":      cp  = parseSafe(tok[i + 1], 0); break;
-                    case "mate":    int m = parseSafe(tok[i + 1], 0);
-                                    mate = true;
-                                    cp = m > 0 ? 100000 - m : -100000 - m;
-                                    break;
-                    case "pv":      pvMove = tok[i + 1]; break;
-                    default: break;
+    public synchronized List<Pv> topMoves(String fen,int time,int count,Progress progress) throws Exception {
+        if(!ready)throw new IllegalStateException("engine not started");
+        count=Math.max(1,Math.min(3,count));setMultiPv(count);
+        Pv[] latest=new Pv[count+1];
+        send("position fen "+fen);
+        searching=true;
+        long lastPublish=System.nanoTime();
+        String bestMove=null;
+        try {
+            send("go movetime "+Math.max(300,time));
+            String line;
+            while((line=out.readLine())!=null) {
+                if(line.startsWith("bestmove ")) {
+                    String[] t=line.split("\\s+");
+                    if(t.length>1&&UciInfo.isMove(t[1]))bestMove=t[1];
+                    break;
+                }
+                UciInfo info=UciInfo.parse(line);
+                if(info==null||info.index>count)continue;
+                latest[info.index]=new Pv(info.move,info.cp,info.mate,info.depth);
+                long now=System.nanoTime();
+                if(progress!=null&&info.index==1&&info.depth>=8&&now-lastPublish>=250_000_000L) {
+                    progress.onUpdate(snapshot(latest));lastPublish=now;
                 }
             }
-            if (pvMove != null && idx >= 1 && idx <= multiPv) {
-                bestByIdx[idx] = pvMove;
-                cpByIdx[idx] = cp;
-                mateByIdx[idx] = mate;
-            }
-        }
-        List<Pv> result = new ArrayList<>();
-        for (int i = 1; i <= multiPv; i++) {
-            if (bestByIdx[i] != null) result.add(new Pv(bestByIdx[i], cpByIdx[i], mateByIdx[i]));
+        } finally {searching=false;}
+        List<Pv> result=snapshot(latest);
+        // The terminal bestmove is authoritative, even if an info line was absent.
+        if(bestMove!=null&&(result.isEmpty()||!bestMove.equals(result.get(0).uci))) {
+            Pv found=null;
+            for(Pv p:result)if(bestMove.equals(p.uci))found=p;
+            if(found!=null)result.remove(found);
+            result.add(0,found!=null?found:new Pv(bestMove,0,false,0));
+            while(result.size()>count)result.remove(result.size()-1);
         }
         return result;
     }
 
-    private int parseSafe(String s, int dflt) {
-        try { return Integer.parseInt(s); } catch (Exception e) { return dflt; }
+    private List<Pv> snapshot(Pv[] latest) {
+        List<Pv> list=new ArrayList<>();for(int i=1;i<latest.length;i++)if(latest[i]!=null)list.add(latest[i]);return list;
+    }
+    /** May interrupt an active search without waiting for its synchronized reader. */
+    public void cancelSearch() {
+        if(searching)try{send("stop");}catch(Exception ignored){}
     }
 
     public synchronized void stop() {
@@ -124,9 +134,9 @@ public class StockfishEngine {
     }
 
     private void send(String cmd) throws Exception {
-        in.write(cmd);
-        in.write("\n");
-        in.flush();
+        synchronized(commands) {
+            in.write(cmd);in.write("\n");in.flush();
+        }
     }
 
     private void waitFor(String token, long timeoutMs) throws Exception {

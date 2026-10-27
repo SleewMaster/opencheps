@@ -1,130 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/panelRoot"
-    android:orientation="vertical"
-    android:background="@drawable/panel_bg"
-    android:padding="10dp"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content">
-
-    <LinearLayout
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content">
-
-        <ImageView
-            android:id="@+id/panelIcon"
-            android:src="@mipmap/ic_launcher"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:contentDescription="OpenCheps"/>
-
-        <LinearLayout
-            android:orientation="vertical"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-            <TextView
-                android:id="@+id/panelTitle"
-                android:text="OpenCheps Bot"
-                android:textColor="#FFFFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-            <TextView
-                android:id="@+id/panelStatus"
-                android:text="Starting…"
-                android:textColor="#FFA5D6A7"
-                android:textSize="10sp"
-                android:maxWidth="180dp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+<?xml version='1.0' encoding='utf-8'?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/panelRoot" android:orientation="vertical" android:padding="12dp" android:background="@drawable/panel_bg" android:layout_width="296dp" android:layout_height="wrap_content">
+    <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <ImageView android:id="@+id/panelIcon" android:src="@drawable/ic_crown" android:contentDescription="OpenCheps" android:layout_width="26dp" android:layout_height="26dp" />
+        <LinearLayout android:orientation="vertical" android:paddingStart="9dp" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content">
+            <TextView android:id="@+id/panelTitle" android:text="OPEN CHEPS" android:textColor="#EAF2FF" android:textStyle="bold" android:textSize="11sp" android:letterSpacing="0.08" android:layout_width="match_parent" android:layout_height="wrap_content" />
+            <TextView android:id="@+id/panelStatus" android:text="Подключаюсь…" android:textColor="#91A9C8" android:textSize="10sp" android:singleLine="true" android:ellipsize="end" android:layout_width="match_parent" android:layout_height="wrap_content" />
         </LinearLayout>
-
-        <ImageButton
-            android:id="@+id/panelRecal"
-            android:background="@drawable/panel_btn_alt"
-            android:src="@android:drawable/ic_menu_rotate"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:layout_marginEnd="3dp"
-            android:contentDescription="Recalibrate"/>
-
-        <ImageButton
-            android:id="@+id/panelToggle"
-            android:background="@drawable/panel_btn"
-            android:src="@android:drawable/ic_media_pause"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:layout_marginEnd="3dp"
-            android:contentDescription="Pause"/>
-
-        <ImageButton
-            android:id="@+id/panelStop"
-            android:background="@drawable/panel_btn_stop"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:contentDescription="Stop"/>
+        <ImageButton android:id="@+id/panelRecal" android:src="@drawable/ic_refresh" android:background="@drawable/panel_btn_alt" android:contentDescription="Новая партия" android:padding="8dp" android:layout_marginStart="4dp" android:layout_width="34dp" android:layout_height="34dp" />
+        <ImageButton android:id="@+id/panelToggle" android:src="@drawable/ic_pause" android:background="@drawable/panel_btn" android:contentDescription="Пауза" android:padding="8dp" android:layout_marginStart="4dp" android:layout_width="34dp" android:layout_height="34dp" />
+        <ImageButton android:id="@+id/panelStop" android:src="@drawable/ic_close" android:background="@drawable/panel_btn_stop" android:contentDescription="Остановить" android:padding="8dp" android:layout_marginStart="4dp" android:layout_width="34dp" android:layout_height="34dp" />
     </LinearLayout>
-
-    <LinearLayout
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingTop="6dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content">
-
-        <TextView
-            android:text="Я:"
-            android:textColor="#FFB0BEC5"
-            android:textSize="11sp"
-            android:paddingEnd="8dp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-        <TextView
-            android:id="@+id/sideWhite"
-            android:text="БЕЛЫЕ"
-            android:textColor="#FF000000"
-            android:textStyle="bold"
-            android:textSize="11sp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="5dp"
-            android:background="@drawable/pill_white"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"/>
-
-        <TextView
-            android:id="@+id/sideBlack"
-            android:text="ЧЁРНЫЕ"
-            android:textColor="#FFCCCCCC"
-            android:textSize="11sp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="5dp"
-            android:background="@drawable/pill_unselected"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+    <TextView android:id="@+id/panelEval" android:text="Жду начальную позицию" android:textColor="#B9F66E" android:textStyle="bold" android:textSize="21sp" android:fontFamily="sans-serif-medium" android:paddingTop="10dp" android:paddingBottom="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="32dp">
+        <TextView android:id="@+id/sideWhite" android:text="БЕЛЫЕ" android:textSize="10sp" android:textStyle="bold" android:textColor="#101925" android:gravity="center" android:background="@drawable/pill_white" android:layout_marginEnd="6dp" android:layout_width="76dp" android:layout_height="match_parent" />
+        <TextView android:id="@+id/sideBlack" android:text="ЧЁРНЫЕ" android:textSize="10sp" android:textStyle="bold" android:textColor="#101925" android:gravity="center" android:background="@drawable/pill_unselected" android:layout_marginEnd="6dp" android:layout_width="76dp" android:layout_height="match_parent" />
+        <TextView android:text="● LIVE" android:gravity="end|center_vertical" android:textColor="#67D7FF" android:textSize="10sp" android:letterSpacing="0.05" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/panelEval"
-        android:text=""
-        android:textColor="#FFFFEB3B"
-        android:textSize="12sp"
-        android:fontFamily="monospace"
-        android:paddingTop="4dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
 </LinearLayout>
-

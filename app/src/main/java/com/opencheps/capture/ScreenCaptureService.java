@@ -48,6 +48,7 @@ import java.util.List;
 
 public class ScreenCaptureService extends Service {
 
+    public static volatile boolean isRunning;
     private static final String TAG = "OC/Capture";
     private static final String CHANNEL_ID = "opencheps_capture";
 
@@ -56,7 +57,7 @@ public class ScreenCaptureService extends Service {
     public static final String EXTRA_USER_SIDE   = "user_side";
     public static final String ACTION_STOP       = "com.opencheps.STOP";
 
-    private static final int[]   ARROW_COLORS = { 0xFF00C853, 0xFFFFB300, 0xFF29B6F6 };
+    private static final int[]   ARROW_COLORS = { 0xFFB9F66E, 0xFF67D7FF, 0xFFFFC56B };
     private static final float[] ARROW_WIDTHS = { 18f, 13f, 10f };
     private static final long    SAMPLE_PERIOD_MS = 500;
     private static final int     LOST_BOARD_THRESHOLD = 8;
@@ -116,6 +117,7 @@ public class ScreenCaptureService extends Service {
             return START_NOT_STICKY;
         }
 
+        isRunning=true;
         startInForeground();
         String sideStr = intent.getStringExtra(EXTRA_USER_SIDE);
         if (sideStr == null) sideStr = Prefs.userSide(this);
@@ -146,14 +148,14 @@ public class ScreenCaptureService extends Service {
                 worker.post(() -> {engineReady = true; panelStatus("Движок готов · " + userSide);});
             } catch (Exception e) {
                 Log.e(TAG, "engine start failed", e);
-                panelStatus("Engine error: " + e.getMessage());
+                panelStatus("Ошибка движка: " + e.getMessage());
             }
         });
 
         setupVirtualDisplay();
         wirePanel();
         worker.postDelayed(sampleLoop, 1000);
-        panelStatus("Starting as " + userSide);
+        panelStatus("Запуск · " + userSide);
         return START_NOT_STICKY;
     }
 
@@ -167,7 +169,7 @@ public class ScreenCaptureService extends Service {
                     @Override public void onPauseToggle(boolean isPaused) {
                         paused=isPaused;
                         worker.post(() -> {
-                            generation++;lastEngineFen="";candidateGrid=null;candidateRepeats=0;
+                            generation++;engine.cancelSearch();lastEngineFen="";candidateGrid=null;candidateRepeats=0;
                             currentArrows.clear();currentPvs.clear();OverlayService.clearAll();panelEval("");
                             panelStatus(isPaused?"Пауза":"Продолжаю");
                         });
@@ -193,6 +195,7 @@ public class ScreenCaptureService extends Service {
 
     private void resetGameState() {
         generation++;
+        if(engine!=null)engine.cancelSearch();
         positionVerified=false;
         confirmedGrid = null;
         candidateGrid = null;
@@ -219,8 +222,8 @@ public class ScreenCaptureService extends Service {
                 try { if(!paused)sampleOnce(); }
                 catch(Throwable t){Log.e(TAG,"sample error",t);}
                 finally {OverlayService.hideArrowsForCapture(false);}
-                if(!destroyed)worker.postDelayed(this,450);
-            },120);
+                if(!destroyed)worker.postDelayed(this,220);
+            },90);
         }
     };
 
@@ -254,7 +257,7 @@ public class ScreenCaptureService extends Service {
                 positionVerified=false;OverlayService.clearArrowsOnly();
                 lostBoardCount++;
                 if (lostBoardCount < LOST_BOARD_THRESHOLD) {
-                    if (lostBoardCount == 1) panelStatus("Looking for board…");
+                    if (lostBoardCount == 1) panelStatus("Ищу доску…");
                     return;
                 }
                 panelStatus("Board lost (" + lostBoardCount + ")");
@@ -267,14 +270,14 @@ public class ScreenCaptureService extends Service {
             OverlayService.setBoardBounds(screenBounds);
 
             if (!engineReady) {
-                panelStatus("Board found · waiting for engine");
+                panelStatus("Доска найдена · запускаю движок");
                 return;
             }
 
             if (!classifier.isTrained()) {
                 boolean ok = classifier.tryBootstrap(bmp, board);
                 if (!ok) {
-                    panelStatus("Show STARTING position to calibrate");
+                    panelStatus("Покажи начальную позицию");
                     OverlayService.setBoardFrameColor(0x66FFB300);
                     return;
                 }
@@ -291,7 +294,7 @@ public class ScreenCaptureService extends Service {
                 observedStm = Side.WHITE;
                 candidateGrid = null;
                 candidateRepeats = 0;
-                panelStatus("Calibrated · you play " + userSide);
+                panelStatus("Готов · твоя сторона: " + userSide);
                 if (observedStm == userSide) {
                     queryEngineAndRender(board, bmp);
                 } else {
@@ -326,6 +329,7 @@ public class ScreenCaptureService extends Service {
                 return;
             }
             positionVerified=false;
+            if(analysisBusy)engine.cancelSearch();
             OverlayService.clearArrowsOnly();panelEval("");
             if(!gridsEqual(grid,candidateGrid)) {candidateGrid=grid;candidateRepeats=1;panelStatus("Проверяю ход…");return;}
             candidateRepeats++;
@@ -411,29 +415,36 @@ public class ScreenCaptureService extends Service {
         panelStatus("Считаю · "+think/1000f+" с");
         analysis.execute(() -> {
             try {
-                final List<StockfishEngine.Pv> pvs=engine.topMoves(fen,think,multiPv);
+                final List<StockfishEngine.Pv> pvs=engine.topMoves(fen,think,multiPv, partial -> {
+                    if(!destroyed)worker.post(() -> renderAnalysis(partial,fen,token,false));
+                });
                 if(destroyed)return;
                 worker.post(() -> {
                     analysisBusy=false;
                     if(token!=generation||paused||!positionVerified||observedStm!=userSide||candidateGrid!=null
                             ||!fen.equals(fenOf(confirmedGrid))) {lastEngineFen="";return;}
                     if(pvs.isEmpty()) {lastEngineFen="";panelStatus("Нет допустимых ходов");return;}
-                    currentPvs=new ArrayList<>(pvs);
-                    BoardDetector.Board latest=lastKnownBoard;
-                    currentArrows=buildArrows(currentPvs,latest);
-                    lastDisplayedArrowFen=fen;
-                    OverlayService.pushArrows(currentArrows,boardBoundsOnScreen(latest));
-                    StockfishEngine.Pv best=pvs.get(0);
-                    String eval=best.mate ? (best.cp>0?"Мат за ":"Мат нам за ")+Math.abs(plyToMate(best.cp))
-                            :String.format(java.util.Locale.US,"%+.2f",best.cp/100.0);
-                    panelEval(formatUci(best.uci)+"  "+eval);
-                    panelStatus("Твой ход · Stockfish 18");
+                    renderAnalysis(pvs,fen,token,true);
                 });
             } catch(Exception e) {
                 Log.w(TAG,"analysis failed",e);
                 if(!destroyed)worker.post(() -> {analysisBusy=false;lastEngineFen="";panelStatus("Повторяю анализ…");});
             }
         });
+    }
+
+    private void renderAnalysis(List<StockfishEngine.Pv> pvs,String fen,int token,boolean complete) {
+        if(destroyed||paused||!positionVerified||token!=generation||observedStm!=userSide
+                ||candidateGrid!=null||!fen.equals(fenOf(confirmedGrid))||pvs.isEmpty())return;
+        currentPvs=new ArrayList<>(pvs);
+        BoardDetector.Board latest=lastKnownBoard;
+        currentArrows=buildArrows(currentPvs,latest);lastDisplayedArrowFen=fen;
+        OverlayService.pushArrows(currentArrows,boardBoundsOnScreen(latest));
+        StockfishEngine.Pv best=pvs.get(0);
+        String eval=best.mate ? (best.cp>0?"Мат за ":"Мат нам за ")+Math.abs(plyToMate(best.cp))
+                :String.format(java.util.Locale.US,"%+.2f",best.cp/100.0);
+        panelEval(formatUci(best.uci)+"  ·  "+eval);
+        panelStatus((complete?"Готово":"Уточняю")+" · глубина "+best.depth);
     }
 
     private void repushCurrentArrows(BoardDetector.Board board) {
@@ -466,7 +477,7 @@ public class ScreenCaptureService extends Service {
             }
             float sx = ox + (fx + 0.5f) * cellX, sy = oy + (fy + 0.5f) * cellY;
             float ex = ox + (tx + 0.5f) * cellX, ey = oy + (ty + 0.5f) * cellY;
-            String lbl = null;
+            String lbl = i==0 ? formatUci(uci) : null;
             float width = Math.max(6f, cellAvg * (i==0 ? .115f : .075f));
             out.add(new ArrowOverlayView.Arrow(sx, sy, ex, ey, ARROW_COLORS[i], width, lbl));
         }
@@ -605,6 +616,7 @@ public class ScreenCaptureService extends Service {
     }
 
     @Override public void onDestroy() {
+        isRunning=false;
         destroyed=true;
         if (worker != null) worker.removeCallbacksAndMessages(null);
         analysis.execute(() -> {try {if(engine!=null)engine.stop();}catch(Exception ignored){}});

@@ -14,6 +14,7 @@ import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.View;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -49,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
                     btnStart.setEnabled(false);
                     moveTaskToBack(true);
                 } else {
-                    toast("Screen capture not granted");
+                    toast("Захват экрана не разрешён");
                 }
             });
 
@@ -80,13 +81,22 @@ public class MainActivity extends AppCompatActivity {
         multiPvBar.setMax(2);
         multiPvBar.setProgress(pv - 1);
         thinkTv.setText(thinkLabelText(think));
-        multiPvTv.setText("Стрелок: " + pv);
+        multiPvTv.setText(pv==1?"Одна стрелка · лучший ход":"Стрелок: "+pv);
         if ("b".equals(side)) sideBlack.setChecked(true); else sideWhite.setChecked(true);
 
+        View.OnClickListener preset = v -> {
+            int ms=v.getId()==R.id.modeFast?1500:v.getId()==R.id.modeBalanced?3000:8000;
+            thinkBar.setProgress(ms);
+        };
+        findViewById(R.id.modeFast).setOnClickListener(preset);
+        findViewById(R.id.modeBalanced).setOnClickListener(preset);
+        findViewById(R.id.modeDeep).setOnClickListener(preset);
+        renderPreset(think);
         thinkBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar b, int v, boolean u) {
-                int t = Math.max(300, v);
+                int t = Math.max(500,Math.round(v/100f)*100);
                 thinkTv.setText(thinkLabelText(t));
+                renderPreset(t);
                 sp.edit().putInt(Prefs.KEY_THINK_MS, t).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar b) {}
@@ -95,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
         multiPvBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar b, int v, boolean u) {
                 int n = v + 1;
-                multiPvTv.setText("Стрелок: " + n);
+                multiPvTv.setText(n==1?"Одна стрелка · лучший ход":"Стрелок: "+n);
                 sp.edit().putInt(Prefs.KEY_MULTIPV, n).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar b) {}
@@ -107,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
         btnOverlay.setOnClickListener(v -> requestOverlay());
         btnStart.setOnClickListener(v -> {
-            if (!Settings.canDrawOverlays(this)) { toast("Grant overlay permission first"); return; }
+            if (!Settings.canDrawOverlays(this)) { requestOverlay(); return; }
             projectionLauncher.launch(mpm.createScreenCaptureIntent());
         });
         btnStop.setOnClickListener(v -> {
@@ -124,12 +134,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String thinkLabelText(int ms) {
-        String strength;
-        if (ms < 700)       strength = "fast";
-        else if (ms < 2000) strength = "balanced";
-        else if (ms < 3500) strength = "deep";
-        else                strength = "thorough";
-        return "Время анализа: " + ms/1000f + " с";
+        String mode=ms<=1500?"быстро":ms<=4000?"баланс":"глубокий анализ";
+        return String.format(java.util.Locale.forLanguageTag("ru"),"%.1f с · %s",ms/1000f,mode);
+    }
+    private void renderPreset(int ms) {
+        int selected=ms<=1500?R.id.modeFast:ms<=4000?R.id.modeBalanced:R.id.modeDeep;
+        for(int id:new int[]{R.id.modeFast,R.id.modeBalanced,R.id.modeDeep}) {
+            TextView v=findViewById(id);v.setBackgroundResource(id==selected?R.drawable.pill_white:R.drawable.pill_unselected);
+            v.setTextColor(id==selected?0xFF101925:0xFFD8E6F7);
+        }
     }
 
     @Override protected void onResume() {
@@ -139,7 +152,8 @@ public class MainActivity extends AppCompatActivity {
         btnOverlay.setText(overlay
                 ? getString(R.string.overlay_granted)
                 : getString(R.string.grant_overlay));
-        btnStart.setEnabled(overlay);
+        btnStart.setEnabled(!ScreenCaptureService.isRunning);
+        btnStop.setEnabled(ScreenCaptureService.isRunning);
     }
 
     private void requestOverlay() {
