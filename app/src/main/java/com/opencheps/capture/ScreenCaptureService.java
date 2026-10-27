@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
@@ -56,6 +57,18 @@ public class ScreenCaptureService extends Service {
     public static final String EXTRA_RESULT_DATA = "result_data";
     public static final String EXTRA_USER_SIDE   = "user_side";
     public static final String ACTION_STOP       = "com.opencheps.STOP";
+    public static final String ACTION_SELECT_BOARD="com.opencheps.SELECT_BOARD";
+    private Rect manualBoardScreen;
+    private int uncertainFrames;
+    private final Handler controls=new Handler(android.os.Looper.getMainLooper());
+
+    /** Close windows immediately, even if capture/engine teardown is still running. */
+    public static void stopSession(Context context) {
+        isRunning=false;
+        OverlayService.dismissNow();
+        context.stopService(new Intent(context,OverlayService.class));
+        context.stopService(new Intent(context,ScreenCaptureService.class));
+    }
 
     private static final int[]   ARROW_COLORS = { 0xFFB9F66E, 0xFF67D7FF, 0xFFFFC56B };
     private static final float[] ARROW_WIDTHS = { 18f, 13f, 10f };
@@ -75,6 +88,7 @@ public class ScreenCaptureService extends Service {
     private volatile boolean destroyed;
     private StockfishEngine  engine;
     private boolean engineReady;
+    private volatile String engineFailure;
     private PieceClassifier  classifier;
 
     private int captureW, captureH, density;
@@ -105,9 +119,15 @@ public class ScreenCaptureService extends Service {
         if (intent == null || ACTION_STOP.equals(intent.getAction())) {
             // MediaProjection consent is single-use. Android must never restart
             // this foreground service without a fresh capture permission intent.
-            stopSelf(startId);
+            stopSession(this);stopSelf(startId);
             return START_NOT_STICKY;
         }
+        if(ACTION_SELECT_BOARD.equals(intent.getAction())) {
+            if(worker!=null&&!destroyed)worker.post(this::selectBoard);
+            else {stopSession(this);stopSelf(startId);}
+            return START_NOT_STICKY;
+        }
+        if(isRunning)return START_NOT_STICKY;
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
         Intent data = intent.getParcelableExtra(EXTRA_RESULT_DATA);
@@ -132,7 +152,7 @@ public class ScreenCaptureService extends Service {
             return START_NOT_STICKY;
         }
         projection.registerCallback(new MediaProjection.Callback() {
-            @Override public void onStop() { stopSelf(); }
+            @Override public void onStop() {if(!destroyed)stopSession(ScreenCaptureService.this);}
         }, null);
 
         workerThread = new HandlerThread("oc-worker", Thread.NORM_PRIORITY);
@@ -148,20 +168,22 @@ public class ScreenCaptureService extends Service {
                 worker.post(() -> {engineReady = true; panelStatus("Движок готов · " + userSide);});
             } catch (Exception e) {
                 Log.e(TAG, "engine start failed", e);
-                panelStatus("Ошибка движка: " + e.getMessage());
+                engineFailure="Ошибка движка: "+e.getMessage();panelStatus(engineFailure);
             }
         });
 
         setupVirtualDisplay();
         wirePanel();
-        worker.postDelayed(sampleLoop, 1000);
+        worker.postDelayed(sampleLoop, 200);
         panelStatus("Запуск · " + userSide);
         return START_NOT_STICKY;
     }
 
     private void wirePanel() {
-        new Handler(getMainLooper()).postDelayed(() -> {
+        controls.postDelayed(() -> {
+            if(destroyed)return;
             FloatingPanel p = OverlayService.panel();
+            if(p==null){wirePanel();return;}
             if (p != null) {
                 p.placeBottomLeft(screenW, screenH);
                 p.setUserSide(userSide);
@@ -174,7 +196,7 @@ public class ScreenCaptureService extends Service {
                             panelStatus(isPaused?"Пауза":"Продолжаю");
                         });
                     }
-                    @Override public void onStop() { stopSelf(); }
+                    @Override public void onStop() {if(!destroyed)stopSession(ScreenCaptureService.this);}
                     @Override public void onRecalibrate() {
                         worker.post(() -> {
                             classifier.reset();resetGameState();OverlayService.clearAll();panelEval("");
@@ -184,8 +206,9 @@ public class ScreenCaptureService extends Service {
                     @Override public void onSideChange(Side newSide) {
                         worker.post(() -> {
                             userSide=newSide;Prefs.setUserSide(getApplicationContext(),newSide==Side.BLACK?"b":"w");
-                            classifier.reset();resetGameState();OverlayService.clearAll();panelEval("");
-                            panelStatus("Сторона: "+newSide+" · покажи начальную позицию");
+                            generation++;engine.cancelSearch();lastEngineFen="";candidateGrid=null;candidateRepeats=0;
+                            currentArrows.clear();currentPvs.clear();OverlayService.clearAll();panelEval("");
+                            panelStatus("Играешь "+(newSide==Side.WHITE?"белыми":"чёрными"));
                         });
                     }
                 });
@@ -200,6 +223,7 @@ public class ScreenCaptureService extends Service {
         confirmedGrid = null;
         candidateGrid = null;
         candidateRepeats = 0;
+        uncertainFrames=0;
         lastEngineFen = "";
         lastDisplayedArrowFen = "";
         observedStm = Side.WHITE;
@@ -211,21 +235,50 @@ public class ScreenCaptureService extends Service {
         currentPvs.clear();
     }
 
+    private void selectBoard() {
+        engine.cancelSearch();generation++;positionVerified=false;
+        currentArrows.clear();currentPvs.clear();OverlayService.clearAll();panelEval("");
+        Rect suggested=manualBoardScreen!=null?manualBoardScreen:lastKnownBoard==null?null:boardBoundsOnScreen(lastKnownBoard);
+        OverlayService.selectBoard(suggested,chosen -> {
+            if(destroyed)return;
+            worker.post(() -> {
+                manualBoardScreen=chosen==null?null:new Rect(chosen);
+                Prefs.saveBoard(this,manualBoardScreen,screenW,screenH);
+                classifier.reset();resetGameState();drainReader();
+                panelStatus(chosen==null?"Авто · покажи начальную позицию":"Рамка сохранена · покажи начальную позицию");
+            });
+        });
+    }
+
     private final Runnable sampleLoop = new Runnable() {
         @Override public void run() {
-            if(destroyed) return;
-            if(paused) { drainReader(); worker.postDelayed(this,500); return; }
-            // Overlays are part of MediaProjection. Never recognize our own arrows.
-            drainReader();
-            OverlayService.hideArrowsForCapture(true);
-            worker.postDelayed(() -> {
-                try { if(!paused)sampleOnce(); }
-                catch(Throwable t){Log.e(TAG,"sample error",t);}
-                finally {OverlayService.hideArrowsForCapture(false);}
-                if(!destroyed)worker.postDelayed(this,220);
-            },90);
+            if(destroyed)return;
+            try {
+                if(paused||OverlayService.selectingBoard())drainReader();
+                else if(!refreshDisplaySize())sampleOnce();
+            }catch(Throwable t){Log.e(TAG,"sample error",t);}
+            if(!destroyed&&worker!=null)worker.postDelayed(this,220);
         }
     };
+
+    /** Resize the existing projection rather than reusing the single-use consent. */
+    private boolean refreshDisplaySize() {
+        DisplayMetrics dm=new DisplayMetrics();
+        ((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(dm);
+        if(dm.widthPixels==screenW&&dm.heightPixels==screenH)return false;
+        screenW=dm.widthPixels;screenH=dm.heightPixels;density=dm.densityDpi;
+        float scale=Math.min(1f,1200f/Math.max(screenW,screenH));
+        captureW=Math.round(screenW*scale);captureH=Math.round(screenH*scale);
+        capToScreenX=(float)screenW/captureW;capToScreenY=(float)screenH/captureH;
+        ImageReader old=reader;
+        reader=ImageReader.newInstance(captureW,captureH,PixelFormat.RGBA_8888,4);
+        virtualDisplay.setSurface(null);virtualDisplay.resize(captureW,captureH,density);virtualDisplay.setSurface(reader.getSurface());
+        if(old!=null)old.close();
+        manualBoardScreen=Prefs.loadBoard(this,screenW,screenH);
+        generation++;engine.cancelSearch();lastEngineFen="";positionVerified=false;candidateGrid=null;candidateRepeats=0;
+        currentArrows.clear();currentPvs.clear();OverlayService.clearAll();panelEval("");
+        panelStatus("Экран повёрнут · ищу доску");return true;
+    }
 
     private void drainReader() {
         if (reader == null) return;
@@ -251,7 +304,14 @@ public class ScreenCaptureService extends Service {
             img.close();
             img = null;
 
-            BoardDetector.Board board = BoardDetector.locate(bmp);
+            classifier.setAnnotationMask(OverlayService.captureMask(capToScreenX,capToScreenY));
+            BoardDetector.Board board;
+            if(manualBoardScreen!=null) {
+                int left=Math.round(manualBoardScreen.left/capToScreenX),top=Math.round(manualBoardScreen.top/capToScreenY);
+                int side=Math.round(manualBoardScreen.width()/capToScreenX);
+                board=left>=0&&top>=0&&left+side<=bmp.getWidth()&&top+side<=bmp.getHeight()
+                        ?new BoardDetector.Board(left,top,side,1):null;
+            } else board=BoardDetector.locate(bmp);
 
             if (board == null) {
                 positionVerified=false;OverlayService.clearArrowsOnly();
@@ -260,7 +320,7 @@ public class ScreenCaptureService extends Service {
                     if (lostBoardCount == 1) panelStatus("Ищу доску…");
                     return;
                 }
-                panelStatus("Board lost (" + lostBoardCount + ")");
+                panelStatus("Доска не найдена · нажми ▣ ДОСКА");
                 OverlayService.clearAll();
                 return;
             }
@@ -269,28 +329,17 @@ public class ScreenCaptureService extends Service {
             Rect screenBounds = boardBoundsOnScreen(board);
             OverlayService.setBoardBounds(screenBounds);
 
-            if (!engineReady) {
-                panelStatus("Доска найдена · запускаю движок");
-                return;
-            }
-
             if (!classifier.isTrained()) {
                 boolean ok = classifier.tryBootstrap(bmp, board);
                 if (!ok) {
-                    panelStatus("Покажи начальную позицию");
+                    panelStatus("Покажи начальную позицию · или ▣ ДОСКА");
                     OverlayService.setBoardFrameColor(0x66FFB300);
                     return;
                 }
                 Side detected = classifier.bootstrapSide();
-                if (detected != userSide) {
-                    classifier.reset();
-                    panelStatus("Board shows " + detected + " — flip or change colour");
-                    OverlayService.setBoardFrameColor(0x66D32F2F);
-                    return;
-                }
                 OverlayService.setBoardFrameColor(0x6600C853);
                 positionVerified=true;
-                confirmedGrid = startingGridFor(userSide);
+                confirmedGrid = startingGridFor(detected);
                 observedStm = Side.WHITE;
                 candidateGrid = null;
                 candidateRepeats = 0;
@@ -311,12 +360,34 @@ public class ScreenCaptureService extends Service {
             VisualMoveTracker.Match match=VisualMoveTracker.match(
                     new ChessPosition(canonical,observedStm,castlingRights,enPassantTarget),costs);
             if(match==null) {
-                positionVerified=false;
-                candidateGrid=null;candidateRepeats=0;
+                // Some apps flip the view without changing the actual position.
+                float[][] rotated=new float[64][];for(int i=0;i<64;i++)rotated[i]=costs[63-i];
+                VisualMoveTracker.Match flipped=VisualMoveTracker.match(
+                        new ChessPosition(canonical,observedStm,castlingRights,enPassantTarget),rotated);
+                if(flipped!=null) {
+                    classifier.setBoardPerspective(classifier.bootstrapSide()==Side.WHITE?Side.BLACK:Side.WHITE);
+                    confirmedGrid=FenBuilder.flip(confirmedGrid);match=flipped;candidateGrid=null;candidateRepeats=0;
+                    generation++;engine.cancelSearch();lastEngineFen="";currentPvs.clear();currentArrows.clear();OverlayService.clearAll();
+                }
+            }
+            if(match==null) {
+                positionVerified=false;candidateGrid=null;candidateRepeats=0;
+                if(uncertainFrames>=3) {
+                    PieceClassifier fresh=new PieceClassifier();
+                    fresh.setAnnotationMask(OverlayService.captureMask(capToScreenX,capToScreenY));
+                    if(fresh.tryBootstrap(bmp,board)) {
+                        classifier=fresh;resetGameState();confirmedGrid=startingGridFor(fresh.bootstrapSide());
+                        positionVerified=true;panelStatus("Новая партия распознана");
+                        if(userSide==Side.WHITE)queryEngineAndRender(board,bmp);return;
+                    }
+                }
+                if(++uncertainFrames<3)return;
                 OverlayService.clearArrowsOnly();currentArrows.clear();currentPvs.clear();
-                lastEngineFen="";panelEval("");panelStatus("Проверяю доску · убери перекрывающие окна");
+                lastEngineFen="";panelEval("");panelStatus("Не вижу позицию · убери окна или нажми ▣ ДОСКА");
                 return;
             }
+            uncertainFrames=0;
+            if(!engineReady)panelStatus(engineFailure==null?"Доска готова · запускаю движок":engineFailure);
             char[][] grid=classifier.bootstrapSide()==Side.BLACK
                     ? FenBuilder.flip(match.position.board) : match.position.board;
             if(match.plies==0) {
@@ -554,6 +625,7 @@ public class ScreenCaptureService extends Service {
         captureW = Math.round(screenW * scale);
         captureH = Math.round(screenH * scale);
         density  = dm.densityDpi;
+        manualBoardScreen=Prefs.loadBoard(this,screenW,screenH);
         capToScreenX = (float) screenW / captureW;
         capToScreenY = (float) screenH / captureH;
 
@@ -599,12 +671,14 @@ public class ScreenCaptureService extends Service {
         Intent stopIntent = new Intent(this, ScreenCaptureService.class).setAction(ACTION_STOP);
         PendingIntent stopPi = PendingIntent.getService(this, 1, stopIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,com.opencheps.ui.MainActivity.class),
+                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.notif_title))
                 .setContentText(getString(R.string.notif_text))
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setOngoing(true)
-                .addAction(0, "Stop", stopPi)
+                .setOngoing(true).setContentIntent(open)
+                .addAction(0, "Выключить оверлей", stopPi)
                 .build();
 
         if (Build.VERSION.SDK_INT >= 29) {
@@ -615,10 +689,15 @@ public class ScreenCaptureService extends Service {
         startService(new Intent(this, com.opencheps.overlay.OverlayService.class));
     }
 
+    @Override public void onTaskRemoved(Intent rootIntent){stopSession(this);super.onTaskRemoved(rootIntent);}
+
     @Override public void onDestroy() {
+        OverlayService.dismissNow();
+        controls.removeCallbacksAndMessages(null);
         isRunning=false;
         destroyed=true;
         if (worker != null) worker.removeCallbacksAndMessages(null);
+        if(engine!=null)engine.cancelSearch();
         analysis.execute(() -> {try {if(engine!=null)engine.stop();}catch(Exception ignored){}});
         analysis.shutdown();
         if (virtualDisplay != null) virtualDisplay.release();

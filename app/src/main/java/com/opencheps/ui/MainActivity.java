@@ -118,10 +118,12 @@ public class MainActivity extends AppCompatActivity {
         btnOverlay.setOnClickListener(v -> requestOverlay());
         btnStart.setOnClickListener(v -> {
             if (!Settings.canDrawOverlays(this)) { requestOverlay(); return; }
-            projectionLauncher.launch(mpm.createScreenCaptureIntent());
+            projectionLauncher.launch(Build.VERSION.SDK_INT>=34
+                    ?mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+                    :mpm.createScreenCaptureIntent());
         });
         btnStop.setOnClickListener(v -> {
-            stopService(new Intent(this, ScreenCaptureService.class));
+            ScreenCaptureService.stopSession(this);
             statusTv.setText(R.string.status_idle);
             btnStop.setEnabled(false);
             btnStart.setEnabled(true);
@@ -154,6 +156,7 @@ public class MainActivity extends AppCompatActivity {
                 : getString(R.string.grant_overlay));
         btnStart.setEnabled(!ScreenCaptureService.isRunning);
         btnStop.setEnabled(ScreenCaptureService.isRunning);
+        statusTv.setText(ScreenCaptureService.isRunning?R.string.status_running:R.string.status_idle);
     }
 
     private void requestOverlay() {

@@ -122,7 +122,7 @@ public class ArrowOverlayView extends View {
             headPath.lineTo(neckX-px*wing,neckY-py*wing);
             headPath.lineTo(neckX-px*half,neckY-py*half);
             headPath.lineTo(startX-px*half,startY-py*half);headPath.close();
-            head.setColor((a.color&0x00ffffff)|(primary?0x28000000:0x14000000));
+            head.setColor((a.color&0x00ffffff)|(primary?0x14000000:0x0C000000));
             float inset=cell*.07f,radius=cell*.12f;
             c.drawRoundRect(a.ex-cell/2+inset,a.ey-cell/2+inset,
                     a.ex+cell/2-inset,a.ey+cell/2-inset,radius,radius,head);

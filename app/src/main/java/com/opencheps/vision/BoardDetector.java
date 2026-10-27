@@ -33,18 +33,19 @@ public class BoardDetector {
             int color=0xff000000|(((best>>10)*8+4)<<16)|((((best>>5)&31)*8+4)<<8)|((best&31)*8+4);
             hist[best]=0;
             boolean distinct=true;
-            for(int c:colors) if(distance(c,color)<45*45) distinct=false;
+            for(int c:colors) if(distance(c,color)<22*22) distinct=false;
             if(distinct) colors.add(color);
         }
         Board winner=null; double bestScore=0;
         for(int a=0;a<colors.size();a++) for(int b=a+1;b<colors.size();b++) {
             int ca=colors.get(a), cb=colors.get(b);
-            if(distance(ca,cb)<65*65) continue;
+            if(distance(ca,cb)<30*30) continue;
+            int tolerance=Math.min(28*28,Math.max(9*9,distance(ca,cb)/5));
             int[] rows=new int[h]; byte[] mask=new byte[w*h];
             for(int y=0;y<h;y++) for(int x=0;x<w;x++) {
                 int p=px[y*w+x];
                 int da=distance(p,ca), db=distance(p,cb);
-                if(Math.min(da,db)<28*28) { mask[y*w+x]=(byte)(da<db?1:2); rows[y]++; }
+                if(Math.min(da,db)<tolerance) { mask[y*w+x]=(byte)(da<db?1:2); rows[y]++; }
             }
             // Each real board row contains background even with pieces/highlights.
             int y=0;

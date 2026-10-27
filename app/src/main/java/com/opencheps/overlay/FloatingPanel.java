@@ -23,6 +23,7 @@ public class FloatingPanel {
     private WindowManager.LayoutParams lp;
     private TextView statusTv, evalTv, sideWhiteTv, sideBlackTv;
     private ImageButton toggleBtn;
+    private volatile android.graphics.Rect bounds;
     private boolean paused = false;
     private Side userSide = Side.WHITE;
     private int screenW, screenH;
@@ -61,8 +62,10 @@ public class FloatingPanel {
                     : R.drawable.ic_pause);
             if (listener != null) listener.onPauseToggle(paused);
         });
-        stopBtn.setOnClickListener(v -> {
-            if (listener != null) listener.onStop();
+        stopBtn.setOnClickListener(v -> com.opencheps.capture.ScreenCaptureService.stopSession(ctx));
+        root.findViewById(R.id.panelBoard).setOnClickListener(v -> {
+            if(com.opencheps.capture.ScreenCaptureService.isRunning)ctx.startService(new android.content.Intent(ctx,
+                    com.opencheps.capture.ScreenCaptureService.class).setAction(com.opencheps.capture.ScreenCaptureService.ACTION_SELECT_BOARD));
         });
         recalBtn.setOnClickListener(v -> {
             if (listener != null) listener.onRecalibrate();
@@ -100,7 +103,7 @@ public class FloatingPanel {
                             dragging = true;
                             lp.x = sx + (int) (e.getRawX() - dx);
                             lp.y = sy + (int) (e.getRawY() - dy);
-                            try { wm.updateViewLayout(root, lp); } catch (Exception ignored) {}
+                            try { wm.updateViewLayout(root, lp);root.post(FloatingPanel.this::updateBounds); } catch (Exception ignored) {}
                             return true;
                         }
                         return false;
@@ -114,6 +117,8 @@ public class FloatingPanel {
         });
 
         try { wm.addView(root, lp); } catch (Exception ignored) {}
+        root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->updateBounds());
+        root.post(this::updateBounds);
         renderSideToggle();
     }
 
@@ -155,7 +160,33 @@ public class FloatingPanel {
             if (h <= 0) h = 180;
             lp.x = Math.max(12, (screenWidth-root.getWidth())/2);
             lp.y = Math.max(50, screenHeight / 12);
-            try { wm.updateViewLayout(root, lp); } catch (Exception ignored) {}
+            try { wm.updateViewLayout(root, lp);root.post(FloatingPanel.this::updateBounds); } catch (Exception ignored) {}
+        });
+    }
+
+    private void updateBounds() {
+        if(root==null||root.getVisibility()!=View.VISIBLE){bounds=null;return;}
+        int[] xy=new int[2];root.getLocationOnScreen(xy);
+        bounds=new android.graphics.Rect(xy[0],xy[1],xy[0]+root.getWidth(),xy[1]+root.getHeight());
+    }
+    public android.graphics.Rect screenBounds(){return bounds==null?null:new android.graphics.Rect(bounds);}
+    public void setVisible(boolean visible) {
+        if(root!=null){root.setVisibility(visible?View.VISIBLE:View.INVISIBLE);root.post(this::updateBounds);}
+    }
+    public void avoidBoard(android.graphics.Rect board) {
+        if(root==null||board==null||lp==null)return;
+        android.graphics.Rect copy=new android.graphics.Rect(board);
+        root.post(() -> {
+            if(root==null)return;updateBounds();
+            if(bounds==null||!android.graphics.Rect.intersects(bounds,copy))return;
+            int gap=12,h=root.getHeight(),w=root.getWidth();
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();wm.getDefaultDisplay().getRealMetrics(dm);
+            if(copy.top>=h+gap+40)lp.y=copy.top-h-gap;
+            else if(dm.heightPixels-copy.bottom>=h+gap)lp.y=copy.bottom+gap;
+            else if(copy.left>=w+gap){lp.x=copy.left-w-gap;lp.y=40;}
+            else if(dm.widthPixels-copy.right>=w+gap){lp.x=copy.right+gap;lp.y=40;}
+            else return;
+            try{wm.updateViewLayout(root,lp);root.post(this::updateBounds);}catch(Exception ignored){}
         });
     }
 
@@ -172,7 +203,7 @@ public class FloatingPanel {
     public void detach() {
         if (root != null) {
             try { wm.removeView(root); } catch (Exception ignored) {}
-            root = null;
+            root = null;bounds=null;
         }
     }
 }

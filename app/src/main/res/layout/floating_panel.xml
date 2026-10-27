@@ -14,6 +14,6 @@
     <LinearLayout android:orientation="horizontal" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="32dp">
         <TextView android:id="@+id/sideWhite" android:text="БЕЛЫЕ" android:textSize="10sp" android:textStyle="bold" android:textColor="#101925" android:gravity="center" android:background="@drawable/pill_white" android:layout_marginEnd="6dp" android:layout_width="76dp" android:layout_height="match_parent" />
         <TextView android:id="@+id/sideBlack" android:text="ЧЁРНЫЕ" android:textSize="10sp" android:textStyle="bold" android:textColor="#101925" android:gravity="center" android:background="@drawable/pill_unselected" android:layout_marginEnd="6dp" android:layout_width="76dp" android:layout_height="match_parent" />
-        <TextView android:text="● LIVE" android:gravity="end|center_vertical" android:textColor="#67D7FF" android:textSize="10sp" android:letterSpacing="0.05" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" />
+        <TextView android:text="▣ ДОСКА" android:gravity="end|center_vertical" android:textColor="#67D7FF" android:textSize="10sp" android:letterSpacing="0.05" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:id="@+id/panelBoard" android:clickable="true" android:focusable="true" android:contentDescription="Выбрать область шахматной доски" />
     </LinearLayout>
 </LinearLayout>

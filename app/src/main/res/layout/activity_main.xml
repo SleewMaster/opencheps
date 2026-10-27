@@ -15,7 +15,7 @@
                     <RadioButton android:id="@+id/sideWhite" android:text="♔  Белые" android:textSize="14sp" android:textStyle="bold" android:textColor="@color/choice_text" android:button="@null" android:gravity="center" android:background="@drawable/choice_bg" android:checked="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="4dp" />
                     <RadioButton android:id="@+id/sideBlack" android:text="♚  Чёрные" android:textSize="14sp" android:textStyle="bold" android:textColor="@color/choice_text" android:button="@null" android:gravity="center" android:background="@drawable/choice_bg" android:checked="false" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:layout_marginEnd="4dp" />
                 </RadioGroup>
-                <TextView android:text="Твои фигуры должны быть внизу доски." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" />
+                <TextView android:text="Цвет игрока и поворот доски выбираются независимо." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" />
             </LinearLayout>
             <LinearLayout android:orientation="vertical" android:padding="18dp" android:layout_marginTop="14dp" android:background="@drawable/surface_card" android:layout_width="match_parent" android:layout_height="wrap_content">
                 <TextView android:text="02  /  СКОРОСТЬ АНАЛИЗА" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.08" />
@@ -36,7 +36,7 @@
                 <Button android:id="@+id/btnStop" android:text="Остановить" android:textAllCaps="false" android:textStyle="bold" android:textSize="14sp" android:textColor="#FFB4C1" android:backgroundTint="#2B2432" android:layout_width="match_parent" android:layout_height="56dp" android:enabled="false" />
             </LinearLayout>
             <TextView android:text="КАК НАЧАТЬ" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" />
-            <TextView android:text="Новая партия → захват всего экрана → первая подсказка.&#10;Дождись калибровки до первого хода." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:lineSpacingExtra="4dp" />
+            <TextView android:text="Новая партия → захват всего экрана → первая подсказка.&#10;Дождись калибровки до первого хода. Если доска не найдена, нажми ▣ ДОСКА на панели и выставь рамку вручную." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:lineSpacingExtra="4dp" />
             <TextView android:text="OPEN CHEPS  /  BOT TRAINING" android:textSize="10sp" android:textColor="#49607F" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" android:layout_marginBottom="12dp" />
         </LinearLayout>
     </ScrollView>

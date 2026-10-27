@@ -20,6 +20,8 @@ public class PieceClassifier {
         'R','N','B','Q','K','B','N','R'
     };
 
+    private PixelMask annotationMask=PixelMask.NONE;
+    public synchronized void setAnnotationMask(PixelMask mask){annotationMask=mask==null?PixelMask.NONE:mask;}
     private SquareSampler.Sample[] templates;
     private SquareSampler.Sample[] previousFrame;
     private char[] previousLabels;
@@ -35,6 +37,7 @@ public class PieceClassifier {
 
     public boolean isTrained() { return trained; }
     public Side bootstrapSide() { return bootstrapSide; }
+    public synchronized void setBoardPerspective(Side side){if(trained)bootstrapSide=side;}
 
     public synchronized boolean tryBootstrap(Bitmap bmp, BoardDetector.Board board) {
         if (board == null) return false;
@@ -173,7 +176,7 @@ public class PieceClassifier {
             for (int f = 0; f < 8; f++) {
                 int cx = Math.round(board.left + (f + 0.5f) * board.square);
                 int cy = Math.round(board.top  + (r + 0.5f) * board.square);
-                samples[r * 8 + f] = SquareSampler.sample(bmp, cx, cy, rad);
+                samples[r * 8 + f] = SquareSampler.sample(bmp, cx, cy, rad, annotationMask);
             }
         }
         return samples;
@@ -216,7 +219,7 @@ public class PieceClassifier {
         if(samples==null)return null;
         float[][] costs=new float[64][VisualMoveTracker.PIECES.length()];
         for(int i=0;i<64;i++) {
-            float empty=0; for(float v:samples[i].feature)empty+=v*v;
+            float empty=SquareSampler.lumDistance(samples[i].feature,new float[samples[i].feature.length]);
             costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
             for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
                 char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;

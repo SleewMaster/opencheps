@@ -14,3 +14,9 @@ dependencyResolutionManagement {
 }
 rootProject.name = "OpenCheps"
 include ':app'
+
+
+if (providers.gradleProperty('uiProbe').isPresent()) {
+    include ':probe'
+    project(':probe').projectDir = file('ci/touch-probe')
+}

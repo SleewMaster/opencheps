@@ -21,6 +21,10 @@ public class SquareSampler {
     }
 
     public static Sample sample(Bitmap bmp, int cx, int cy, int rad) {
+        return sample(bmp,cx,cy,rad,PixelMask.NONE);
+    }
+
+    public static Sample sample(Bitmap bmp,int cx,int cy,int rad,PixelMask mask) {
         int W = bmp.getWidth(), H = bmp.getHeight();
         int size = rad * 2;
         int x0 = Math.max(0, cx - rad);
@@ -39,11 +43,15 @@ public class SquareSampler {
         float[] shape = new float[N * N * 2];
         float[] bg=new float[3];
         for(int c=0;c<3;c++) {
-            int shift=(2-c)*8;
-            int[] vals=new int[2*w+2*h];int n=0;
-            for(int x=0;x<w;x++){vals[n++]=(px[x]>>shift)&255;vals[n++]=(px[(h-1)*w+x]>>shift)&255;}
-            for(int y=0;y<h;y++){vals[n++]=(px[y*w]>>shift)&255;vals[n++]=(px[y*w+w-1]>>shift)&255;}
-            java.util.Arrays.sort(vals); bg[c]=vals[n/2]/255f;
+            int shift=(2-c)*8;int[] vals=new int[N*N];int n=0;
+            for(int y=0;y<N;y++)for(int x=0;x<N;x++) {
+                if(x>N*.18f&&x<N*.82f&&y>N*.18f&&y<N*.82f)continue;
+                int sx=x*w/N,sy=y*h/N;
+                if(mask.excludes(x0+sx,y0+sy))continue;
+                vals[n++]=(px[sy*w+sx]>>shift)&255;
+            }
+            if(n==0)bg[c]=.5f;
+            else {java.util.Arrays.sort(vals,0,n);bg[c]=vals[n/2]/255f;}
         }
         float sR = 0, sG = 0, sB = 0;
         int count = N * N;
@@ -62,6 +70,9 @@ public class SquareSampler {
                 float l=lumGrid[y*N+x];
                 shape[(y*N+x)*2]=ink*l;
                 shape[(y*N+x)*2+1]=ink*(1-l);
+                if(mask.excludes(x0+sx,y0+sy)) {
+                    shape[(y*N+x)*2]=Float.NaN;shape[(y*N+x)*2+1]=Float.NaN;
+                }
                 sR += rf; sG += gf; sB += bf;
             }
         }
@@ -85,11 +96,12 @@ public class SquareSampler {
     public static float lumDistance(float[] a, float[] b) {
         float s = 0;
         int n = Math.min(a.length, b.length);
-        for (int i = 0; i < n; i++) {
-            float d = a[i] - b[i];
-            s += d * d;
+        int valid=0;
+        for (int i=0;i<n;i++) {
+            if(Float.isNaN(a[i])||Float.isNaN(b[i]))continue;
+            float d=a[i]-b[i];s+=d*d;valid++;
         }
-        return s;
+        return valid<n*.45f ? Float.POSITIVE_INFINITY : s*n/valid;
     }
 }
 
