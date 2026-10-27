@@ -10,6 +10,7 @@ public final class CameraBoard {
     private final PieceClassifier classifier=new PieceClassifier();
     private final FrameConsensus consensus=new FrameConsensus();
     private ChessPosition position;
+    private float confidenceScale=1;
     private final Side perspective;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
     public CameraBoard(Side perspective){this.perspective=perspective;}
@@ -32,12 +33,16 @@ public final class CameraBoard {
             if(!classifier.tryBootstrap(rectified,bounds))return null;
             // Reject a disagreement rather than attaching opposite labels to the templates.
             if(classifier.bootstrapSide()!=perspective){classifier.reset();return null;}
+            confidenceScale=CameraConfidence.scale(classifier.labelCosts(rectified,bounds));
             char[][] start={"rnbqkbnr".toCharArray(),"pppppppp".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"PPPPPPPP".toCharArray(),"RNBQKBNR".toCharArray()};
             position=new ChessPosition(start,Side.WHITE,"KQkq","-");
         }
         float[][] screen=classifier.labelCosts(rectified,bounds),canonical=new float[64][];
         if(screen==null){consensus.accept(null);return null;}
-        for(int i=0;i<64;i++)canonical[i]=screen[perspective==Side.BLACK?63-i:i];
+        for(int i=0;i<64;i++) {
+            canonical[i]=screen[perspective==Side.BLACK?63-i:i];
+            for(int label=0;label<canonical[i].length;label++)canonical[i][label]*=confidenceScale;
+        }
         VisualMoveTracker.Match match=VisualMoveTracker.match(position,canonical);
         if(match==null){consensus.accept(null);return null;}
         String key=fen(match.position);

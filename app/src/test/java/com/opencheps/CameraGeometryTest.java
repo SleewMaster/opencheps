@@ -11,4 +11,9 @@ public class CameraGeometryTest {
     @Test public void requiresConsecutiveFrames(){FrameConsensus f=new FrameConsensus();assertFalse(f.accept("start"));assertTrue(f.accept("start"));assertFalse(f.accept("e4"));assertTrue(f.accept("e4"));}
     @Test public void uncertaintyResetsEvidence(){FrameConsensus f=new FrameConsensus();f.accept("e4");assertFalse(f.accept(null));assertFalse(f.accept("e4"));assertTrue(f.accept("e4"));}
     @Test public void competingFramesDoNotCommit(){FrameConsensus f=new FrameConsensus();f.accept("e4");assertFalse(f.accept("d4"));assertFalse(f.accept("e4"));}
+    private float[][] signal(float value){float[][] c=new float[64][13];for(float[] row:c)row[0]=value;return c;}
+    @Test public void normalizesFaintPieceSignal(){assertEquals(8f,CameraConfidence.scale(signal(.0125f)),.0001f);}
+    @Test public void neverRelaxesAbsoluteErrorCaps(){assertEquals(1f,CameraConfidence.scale(signal(.4f)),.0001f);}
+    @Test public void boundsFaintSignalAmplification(){assertEquals(10f,CameraConfidence.scale(signal(.001f)),.0001f);}
+    @Test public void rejectsInvalidCalibrationScale(){float[][] c=signal(.02f);c[0][0]=Float.NaN;assertEquals(1f,CameraConfidence.scale(c),.0001f);}
 }
