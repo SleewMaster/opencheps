@@ -170,3 +170,30 @@ for attempt in $(seq 1 45); do
 done
 [[ "$result" == "CAMERA_VISION_OK 60" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
+
+# Denied permission must leave a usable camera screen and a working exit.
+adb shell pm revoke com.opencheps.bottrainer android.permission.CAMERA
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
+adb shell uiautomator dump /sdcard/camera-reenter.xml
+adb pull /sdcard/camera-reenter.xml ui-proof/camera-reenter.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/camera-reenter.xml').iter('node'))
+b=next(n for n in nodes if n.get('resource-id','').endswith('/btnStart'));x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYUI
+adb shell uiautomator dump /sdcard/camera-permission.xml
+adb pull /sdcard/camera-permission.xml ui-proof/camera-permission.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/camera-permission.xml').iter('node'))
+b=next(n for n in nodes if n.get('resource-id','').endswith('/permission_deny_button'));x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYUI
+adb shell uiautomator dump /sdcard/camera-denied.xml
+adb pull /sdcard/camera-denied.xml ui-proof/camera-denied.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess
+nodes=list(E.parse('ui-proof/camera-denied.xml').iter('node'))
+assert any('Камера не разрешена.' in n.get('text','') for n in nodes),'denial was not handled'
+b=next(n for n in nodes if n.get('text')=='Закрыть');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+print('CAMERA_UI_OK preview, corners, source persistence, close, permission denial')
+PYUI

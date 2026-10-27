@@ -69,7 +69,11 @@ public class CameraActivity extends AppCompatActivity {
         preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FILL_CENTER);stage.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         boardView=new CameraBoardView(this);stage.addView(boardView,new FrameLayout.LayoutParams(-1,-1));
         boardView.onSizeChanged=()->reset(true);
-        preview.getPreviewStreamState().observe(this,state->{streaming=state==PreviewView.StreamState.STREAMING;if(streaming)android.util.Log.i("OC/Camera","CAMERA_STREAMING");});
+        preview.getPreviewStreamState().observe(this,state->{
+            streaming=state==PreviewView.StreamState.STREAMING;
+            if(streaming)android.util.Log.i("OC/Camera","CAMERA_STREAMING");
+            else {invalidateAdvice();if(active&&!boardView.editing())status.setText("Поток камеры остановлен · жду изображение");}
+        });
         // Tap the visible board to focus when corner editing is finished.
         preview.setOnTouchListener((v,event)->{
             if(event.getAction()==MotionEvent.ACTION_UP&&camera!=null){
