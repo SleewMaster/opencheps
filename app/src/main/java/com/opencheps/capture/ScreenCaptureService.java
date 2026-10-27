@@ -37,6 +37,7 @@ import com.opencheps.util.Side;
 import com.opencheps.vision.BoardDetector;
 import com.opencheps.vision.FenBuilder;
 import com.opencheps.vision.MoveAnalyzer;
+import com.opencheps.vision.MoveSequenceRecovery;
 import com.opencheps.vision.PieceClassifier;
 
 import java.nio.ByteBuffer;
@@ -322,6 +323,9 @@ public class ScreenCaptureService extends Service {
             if (!gridsEqual(grid, candidateGrid)) {
                 candidateGrid = grid;
                 candidateRepeats = 1;
+                // The displayed advice is for the previous position.
+                OverlayService.clearArrowsOnly();
+                panelEval("");
                 panelStatus("Saw change…");
                 return;
             }
@@ -344,14 +348,23 @@ public class ScreenCaptureService extends Service {
 
             if (m.kind == MoveAnalyzer.Kind.UNKNOWN || m.mover == null
                     || m.mover != observedStm) {
-                // OCR can mistake highlights for pieces. Never silently switch
-                // to a guessed position or invent whose turn it is.
+                // A fast opponent may respond before we sample our own move.
+                // Recover only if both moves form one unambiguous legal-looking
+                // sequence from the confirmed board to the observed board.
+                MoveSequenceRecovery.Result recovered =
+                        MoveSequenceRecovery.recover(oldRules, newRules, observedStm);
+                if (recovered != null) {
+                    acceptTwoMoves(recovered, grid, board, bmp);
+                    return;
+                }
+                // OCR can mistake highlighted squares for pieces: never guess.
                 OverlayService.clearArrowsOnly();
+                panelEval("");
                 currentArrows.clear();
                 currentPvs.clear();
                 lastEngineFen = "";
                 panelStatus(candidateRepeats >= 5
-                        ? "Position/turn unclear · recalibrate on STARTING board"
+                        ? "Position/turn unclear · show STARTING board and tap ↻"
                         : "Checking board · " + m.changeCount + " changed");
                 return;
             }
@@ -370,6 +383,7 @@ public class ScreenCaptureService extends Service {
             candidateGrid = null;
             candidateRepeats = 0;
 
+            panelEval("");
             panelStatus(m.mover + " played " + m.kind);
 
             if (observedStm == userSide) {
@@ -388,6 +402,35 @@ public class ScreenCaptureService extends Service {
             if (bmp != null && !bmp.isRecycled()) bmp.recycle();
             if (img != null) try { img.close(); } catch (Exception ignored) {}
             busy = false;
+        }
+    }
+
+    /**
+     * Accept exactly two distinct, validated moves missed between screenshots.
+     * Recovery coordinates are canonical; the stored grid uses screen orientation.
+     */
+    private void acceptTwoMoves(MoveSequenceRecovery.Result path, char[][] screenGrid,
+                                BoardDetector.Board board, Bitmap bmp) {
+        char[][] midScreen = classifier.bootstrapSide() == Side.BLACK
+                ? FenBuilder.flip(path.intermediate) : path.intermediate;
+        updatePositionMetadata(confirmedGrid, midScreen, path.first);
+        updatePositionMetadata(midScreen, screenGrid, path.second);
+        confirmedGrid = screenGrid;
+        classifier.commitConfirmed(confirmedGrid, bmp, board);
+        observedStm = path.second.mover == Side.WHITE ? Side.BLACK : Side.WHITE;
+        candidateGrid = null;
+        candidateRepeats = 0;
+        currentPvs.clear();
+        currentArrows.clear();
+        lastEngineFen = "";
+        lastDisplayedArrowFen = "";
+        OverlayService.clearArrowsOnly();
+        panelEval("");
+        if (observedStm == userSide) {
+            panelStatus("Caught up (2 moves) · analyzing");
+            queryEngineAndRender(board, bmp);
+        } else {
+            panelStatus("Caught up (2 moves) · waiting for " + observedStm);
         }
     }
 
