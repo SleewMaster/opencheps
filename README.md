@@ -1,5 +1,9 @@
 # OpenCheps Bot 0.6.0
 
+**[Скачать APK 0.6.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.6.0/OpenCheps_Bot_0.6.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.6.0)**
+
+Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана в начальной расстановке**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
+
 Android chess analysis with Stockfish 18. Choose **Screen** or **Camera** on the main screen. This is an experimental build: recognition depends on the board theme, lighting and a correct initial calibration.
 
 ## Screen
@@ -26,4 +30,4 @@ App package: `com.opencheps.bottrainer`. Camera mode does not run concurrently w
 
 ## License
 
-App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see `licenses/Stockfish-Copying.txt` and `THIRD_PARTY_NOTICES.md` in release v0.4.0. Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
+App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.6.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.

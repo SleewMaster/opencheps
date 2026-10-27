@@ -1,0 +1,54 @@
+name: Publish OpenCheps Bot 0.6.0
+on:
+  push:
+    branches: [release-v0.6.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-opencheps-v0.6.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the successful tested source build
+        run: |
+          set -euo pipefail
+          gh api repos/$GH_REPO/actions/runs/40550941701 --jq '.status + " " + .conclusion + " " + .head_sha' > /tmp/opencheps-tested-run
+          test "$(cat /tmp/opencheps-tested-run)" = 'completed success 53999dd9076871cd933cb1755137612b9ff20e97'
+      - uses: actions/download-artifact@v4
+        with:
+          name: opencheps-arm64-v8a-debug
+          run-id: 40550941701
+          github-token: ${{ github.token }}
+          path: release-assets
+      - name: Prepare the exact tested APK and licenses
+        run: |
+          set -euo pipefail
+          mv release-assets/app-arm64-v8a-debug.apk release-assets/OpenCheps_Bot_0.6.0.apk
+          cd release-assets
+          echo '450b219cf33ac198697242aaceb57e1df595dcc5bfd6c57999491f12025d2199  OpenCheps_Bot_0.6.0.apk' > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          cp ../LICENSE OpenCheps_LICENSE.txt
+          cp ../licenses/Stockfish-Copying.txt Stockfish_COPYING.txt
+          cp ../release/v0.6.0/THIRD_PARTY_NOTICES.txt .
+      - name: Publish experimental release with all assets attached
+        run: |
+          set -euo pipefail
+          if gh release view v0.6.0 --json isDraft --jq '.isDraft' > /tmp/opencheps-existing-draft 2>/dev/null; then
+            test "$(cat /tmp/opencheps-existing-draft)" = 'true'
+            test "$(gh api repos/$GH_REPO/git/ref/tags/v0.6.0 --jq '.object.sha')" = '53999dd9076871cd933cb1755137612b9ff20e97'
+          else
+            gh release create v0.6.0 --target 53999dd9076871cd933cb1755137612b9ff20e97 --title 'OpenCheps Bot 0.6.0 — экран и камера' --notes-file release/v0.6.0/notes.md --draft --prerelease
+          fi
+          gh release upload v0.6.0 release-assets/* --clobber
+          gh release edit v0.6.0 --draft=false --prerelease
+          gh release view v0.6.0 --json url,isDraft,isPrerelease,assets
