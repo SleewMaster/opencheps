@@ -11,6 +11,12 @@ public class FenBuilder {
     }
 
     public static String build(char[][] grid, Side bootstrapSide, Side stm) {
+        return build(grid, bootstrapSide, stm, "-", "-", 0, 1);
+    }
+
+    /** Preserve rights that depend on move history, not just piece locations. */
+    public static String build(char[][] grid, Side bootstrapSide, Side stm,
+                               String rights, String enPassant, int halfmove, int fullmove) {
         char[][] g = bootstrapSide == Side.BLACK ? flip(grid) : grid;
 
         Validation v = validate(g);
@@ -28,7 +34,10 @@ public class FenBuilder {
             if (run > 0) sb.append(run);
             if (r < 7) sb.append('/');
         }
-        return sb.toString() + " " + (stm == Side.WHITE ? "w" : "b") + " - - 0 1";
+        return sb.toString() + " " + (stm == Side.WHITE ? "w" : "b")
+                + " " + (rights == null || rights.isEmpty() ? "-" : rights)
+                + " " + (enPassant == null ? "-" : enPassant)
+                + " " + Math.max(0, halfmove) + " " + Math.max(1, fullmove);
     }
 
     public static Validation validate(char[][] g) {
