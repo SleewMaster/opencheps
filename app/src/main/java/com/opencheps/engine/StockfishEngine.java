@@ -71,7 +71,7 @@ public class StockfishEngine {
     public synchronized List<Pv> topMoves(String fen, int movetimeMs, int multiPv) throws Exception {
         if (!ready) throw new IllegalStateException("engine not started");
         setMultiPv(multiPv);
-        send("ucinewgame");
+        // Keep the transposition table between related training positions.
         send("position fen " + fen);
         send("go movetime " + movetimeMs);
 
