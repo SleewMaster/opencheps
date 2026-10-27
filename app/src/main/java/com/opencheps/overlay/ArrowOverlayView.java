@@ -139,10 +139,11 @@ public class ArrowOverlayView extends View {
                 destination=destination.toUpperCase(java.util.Locale.ROOT);
                 label.setTextSize(cell*.17f);label.setColor(a.color);
                 float tw=label.measureText(destination),pad=cell*.06f;
-                float bx=a.ex-tw/2-pad,by=a.ey+cell*.24f;
+                float badgeX=a.ex-ux*cell*.30f,badgeY=a.ey-uy*cell*.30f;
+                float bx=badgeX-tw/2-pad,by=badgeY-cell*.115f;
                 labelBg.setColor(0xF0101925);
                 c.drawRoundRect(bx,by,bx+tw+2*pad,by+cell*.23f,cell*.05f,cell*.05f,labelBg);
-                c.drawText(destination,a.ex-tw/2,by+cell*.17f,label);
+                c.drawText(destination,badgeX-tw/2,by+cell*.17f,label);
             }
         }
         c.restore();

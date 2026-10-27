@@ -96,7 +96,11 @@ adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.OverlayTestAc
 for attempt in $(seq 1 30); do
   result=$(adb shell run-as com.opencheps.bottrainer cat files/vision-result.txt 2>/dev/null || true)
   if [[ "$result" == VISION_OK* ]]; then break; fi
-  if [[ "$result" == VISION_FAIL* ]]; then adb logcat -d -s NativeVisionCheck:E; echo "$result"; exit 1; fi
+  if [[ "$result" == VISION_FAIL* ]]; then
+    adb exec-out run-as com.opencheps.bottrainer cat files/vision-shot.png > ui-proof/vision-shot.png || true
+    adb exec-out run-as com.opencheps.bottrainer cat files/vision-plain.png > ui-proof/vision-plain.png || true
+    adb logcat -d -s NativeVisionCheck:E; echo "$result"; exit 1
+  fi
   sleep 1
 done
 [[ "$result" == "VISION_OK 20" ]] || { adb logcat -d -s NativeVisionCheck:E; echo "Missing vision result: $result"; exit 1; }

@@ -90,7 +90,8 @@ public class OverlayService extends Service {
         float cell=bounds==null?80f:bounds.width()/8f;
         if(a!=null)for(int i=0;i<a.size();i++) {
             ArrowOverlayView.Arrow p=a.get(i);
-            marks.add(new com.opencheps.vision.ArrowOcclusion.Mark(p.sx,p.sy,p.ex,p.ey,cell,i==0,p.label!=null));
+            int letters=p.label==null?0:p.label.substring(p.label.indexOf('→')+1).length();
+            marks.add(new com.opencheps.vision.ArrowOcclusion.Mark(p.sx,p.sy,p.ex,p.ey,cell,i==0,letters));
         }
         previousAnnotations=annotations;previousUntil=android.os.SystemClock.uptimeMillis()+500;
         annotations=marks.toArray(new com.opencheps.vision.ArrowOcclusion.Mark[0]);

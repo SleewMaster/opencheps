@@ -10,4 +10,11 @@ public class ArrowOcclusionTest {
  @Test public void leavesHalfTheDestinationVisible(){ArrowOcclusion m=vertical();int valid=0,total=0;for(int y=408;y<492;y+=4)for(int x=408;x<492;x+=4){total++;if(!m.excludes(x,y))valid++;}assertTrue(valid>total*.45f);}
  @Test public void ignoresMaskedFeaturePixels(){assertEquals(0f,SquareSampler.lumDistance(new float[]{0,Float.NaN,1,1},new float[]{0,100,1,1}),0.00001f);}
  @Test public void rejectsAlmostFullyCoveredSquare(){assertTrue(Float.isInfinite(SquareSampler.lumDistance(new float[]{Float.NaN,Float.NaN,1,Float.NaN},new float[4])));}
+ @Test public void everyArrowDirectionPreservesEnoughTargetPixels(){
+  for(float[] start:new float[][]{{0,200},{0,-200},{200,0},{-200,0},{-100,-200},{100,200}}){
+   ArrowOcclusion m=new ArrowOcclusion(new ArrowOcclusion.Mark(start[0],start[1],0,0,100,true,true));
+   int valid=0;for(int y=0;y<20;y++)for(int x=0;x<20;x++)if(!m.excludes(-42+x*84f/20,-42+y*84f/20))valid++;
+   assertTrue(valid>400*.45f);
+  }
+ }
 }

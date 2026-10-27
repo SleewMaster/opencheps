@@ -6,8 +6,13 @@ public final class ArrowOcclusion implements PixelMask {
     public static final class Mark {
         public final float sx,sy,ex,ey,cell;
         public final boolean primary,label;
+        public final int labelCharacters;
         public Mark(float sx,float sy,float ex,float ey,float cell,boolean primary,boolean label) {
-            this.sx=sx;this.sy=sy;this.ex=ex;this.ey=ey;this.cell=cell;this.primary=primary;this.label=label;
+            this(sx,sy,ex,ey,cell,primary,label?2:0);
+        }
+        public Mark(float sx,float sy,float ex,float ey,float cell,boolean primary,int labelCharacters) {
+            this.sx=sx;this.sy=sy;this.ex=ex;this.ey=ey;this.cell=cell;this.primary=primary;
+            this.labelCharacters=labelCharacters;this.label=labelCharacters>0;
         }
     }
     private final Mark[] marks;
@@ -33,7 +38,8 @@ public final class ArrowOcclusion implements PixelMask {
         float ax=Math.abs(x-a.ex),ay=Math.abs(y-a.ey),edge=cell*.43f;
         if(ax<cell*.49f&&ay<cell*.49f
                 &&(Math.abs(ax-edge)<cell*.065f||Math.abs(ay-edge)<cell*.065f))return true;
-        if(a.label&&Math.abs(x-a.ex)<cell*.39f&&y>=a.ey+cell*.20f&&y<=a.ey+cell*.50f)return true;
+        if(a.label&&Math.abs(x-(a.ex-ux*cell*.30f))<cell*(.12f+.055f*a.labelCharacters)
+                &&Math.abs(y-(a.ey-uy*cell*.30f))<cell*.15f)return true;
         return false;
     }
     private static float segmentDistance(float x,float y,float ax,float ay,float bx,float by) {

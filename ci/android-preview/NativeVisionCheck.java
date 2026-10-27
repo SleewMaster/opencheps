@@ -30,7 +30,11 @@ public final class NativeVisionCheck {
       Bitmap bmp=render(w,h,top,moved?screenAfter:screenInitial,colors);Canvas c=new Canvas(bmp);int save=c.saveLayerAlpha(0,0,w,h,191);arrows.draw(c);c.restoreToCount(save);
       float[][] seen=classifier.labelCosts(bmp,board),costs=new float[64][];for(int i=0;i<64;i++)costs[i]=seen[flipped?63-i:i];
       VisualMoveTracker.Match match=VisualMoveTracker.match(new ChessPosition(initial,Side.WHITE,"KQkq","-"),costs);
-      if(match==null||match.plies!=(moved?1:0)||(moved&&!match.position.move.equals("e2e4")))throw new AssertionError("visible arrow theme="+index+" moved="+moved+" match="+(match==null?"null":match.position.move));
+      if(match==null||match.plies!=(moved?1:0)||(moved&&!match.position.move.equals("e2e4"))){
+       try(FileOutputStream out=new FileOutputStream(new File(activity.getFilesDir(),"vision-shot.png"))){bmp.compress(Bitmap.CompressFormat.PNG,100,out);}
+       try(FileOutputStream out=new FileOutputStream(new File(activity.getFilesDir(),"vision-plain.png"))){plain.compress(Bitmap.CompressFormat.PNG,100,out);}
+       throw new AssertionError("visible arrow theme="+index+" moved="+moved+" match="+(match==null?"null":match.position.move));
+      }
       bmp.recycle();
      }
      plain.recycle();run(activity,arrows,root,result,index+1,passed+2);
