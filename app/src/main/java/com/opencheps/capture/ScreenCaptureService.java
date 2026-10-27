@@ -90,15 +90,22 @@ public class ScreenCaptureService extends Service {
     @Nullable @Override public IBinder onBind(Intent i) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            stopSelf();
+        if (intent == null || ACTION_STOP.equals(intent.getAction())) {
+            // MediaProjection consent is single-use. Android must never restart
+            // this foreground service without a fresh capture permission intent.
+            stopSelf(startId);
+            return START_NOT_STICKY;
+        }
+
+        int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
+        Intent data = intent.getParcelableExtra(EXTRA_RESULT_DATA);
+        if (resultCode != android.app.Activity.RESULT_OK || data == null) {
+            Log.w(TAG, "Missing capture consent; stopping instead of crashing");
+            stopSelf(startId);
             return START_NOT_STICKY;
         }
 
         startInForeground();
-
-        int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0);
-        Intent data = intent.getParcelableExtra(EXTRA_RESULT_DATA);
         String sideStr = intent.getStringExtra(EXTRA_USER_SIDE);
         if (sideStr == null) sideStr = Prefs.userSide(this);
         userSide = "b".equals(sideStr) ? Side.BLACK : Side.WHITE;
@@ -137,7 +144,7 @@ public class ScreenCaptureService extends Service {
         wirePanel();
         worker.postDelayed(sampleLoop, 1000);
         panelStatus("Starting as " + userSide);
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private void wirePanel() {
