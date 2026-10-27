@@ -75,6 +75,9 @@ jobs:
       - name: Run chess logic regression tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Static Android lint checks
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+
       - name: Build debug APK splits
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
