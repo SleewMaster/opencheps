@@ -5,7 +5,7 @@ trap 'adb logcat -d > ui-proof/logcat.txt || true' EXIT
 adb shell wm size 720x1280
 adb shell wm density 280
 adb install -r -g app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
+adb shell am start -W -f 0x14000000 -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
 sleep 2
 adb shell uiautomator dump /sdcard/main.xml
 adb pull /sdcard/main.xml ui-proof/main.xml
@@ -114,7 +114,7 @@ echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
 
 # Camera mode launches from the actual source selector with no projection consent.
-adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
+adb shell am start -W -f 0x14000000 -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
 adb shell input swipe 360 350 360 1100 300
 adb shell uiautomator dump /sdcard/sources.xml
 adb pull /sdcard/sources.xml ui-proof/sources.xml
@@ -174,7 +174,7 @@ echo "$result"
 
 # Denied permission must leave a usable camera screen and a working exit.
 adb shell pm revoke com.opencheps.bottrainer android.permission.CAMERA
-adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
+adb shell am start -W -f 0x14000000 -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
 adb shell uiautomator dump /sdcard/camera-reenter.xml
 adb pull /sdcard/camera-reenter.xml ui-proof/camera-reenter.xml
 python3 - <<'PYUI'
