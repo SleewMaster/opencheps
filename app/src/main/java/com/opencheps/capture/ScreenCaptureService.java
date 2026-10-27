@@ -332,11 +332,18 @@ public class ScreenCaptureService extends Service {
                 return;
             }
 
-            MoveAnalyzer.Result m = MoveAnalyzer.analyze(confirmedGrid, grid);
+            // Move validation uses standard board orientation, even if BLACK is
+            // displayed at the bottom of the screen.
+            char[][] oldRules = classifier.bootstrapSide() == Side.BLACK
+                    ? FenBuilder.flip(confirmedGrid) : confirmedGrid;
+            char[][] newRules = classifier.bootstrapSide() == Side.BLACK
+                    ? FenBuilder.flip(grid) : grid;
+            MoveAnalyzer.Result m = MoveAnalyzer.analyze(oldRules, newRules);
             Log.i(TAG, "Move attempt: kind=" + m.kind + " mover=" + m.mover
                     + " changes=" + m.changeCount);
 
-            if (m.kind == MoveAnalyzer.Kind.UNKNOWN || m.mover == null) {
+            if (m.kind == MoveAnalyzer.Kind.UNKNOWN || m.mover == null
+                    || m.mover != observedStm) {
                 // OCR can mistake highlights for pieces. Never silently switch
                 // to a guessed position or invent whose turn it is.
                 OverlayService.clearArrowsOnly();
@@ -344,7 +351,7 @@ public class ScreenCaptureService extends Service {
                 currentPvs.clear();
                 lastEngineFen = "";
                 panelStatus(candidateRepeats >= 5
-                        ? "Position unclear · tap ↻ on a STARTING board"
+                        ? "Position/turn unclear · recalibrate on STARTING board"
                         : "Checking board · " + m.changeCount + " changed");
                 return;
             }
