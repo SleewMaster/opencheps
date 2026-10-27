@@ -134,4 +134,39 @@ public class ChessLogicTest {
         char[][] a=initial(), b=FenBuilder.flip(FenBuilder.flip(a));
         for(int r=0;r<8;r++) assertArrayEquals(a[r],b[r]);
     }
+    @Test public void recoversTwoFastMovesE4G6() {
+        char[][] before = initial(), after = copy(before);
+        after[6][4] = '.'; after[4][4] = 'P'; // e2-e4
+        after[1][6] = '.'; after[2][6] = 'p'; // g7-g6
+        com.opencheps.vision.MoveSequenceRecovery.Result r =
+                com.opencheps.vision.MoveSequenceRecovery.recover(before, after, Side.WHITE);
+        assertNotNull(r);
+        assertEquals(Side.WHITE, r.first.mover);
+        assertEquals(Side.BLACK, r.second.mover);
+        assertEquals(MoveAnalyzer.Kind.QUIET, r.first.kind);
+        assertEquals(MoveAnalyzer.Kind.QUIET, r.second.kind);
+        assertEquals('P', r.intermediate[4][4]);
+        assertEquals('p', r.intermediate[1][6]);
+    }
+    @Test public void recoversTwoFastMovesInBlackBoardOrientation() {
+        char[][] before = initial(), after = copy(before);
+        after[6][4] = '.'; after[4][4] = 'P';
+        after[1][6] = '.'; after[2][6] = 'p';
+        char[][] blackPrevious = FenBuilder.flip(before);
+        char[][] blackCurrent = FenBuilder.flip(after);
+        com.opencheps.vision.MoveSequenceRecovery.Result r =
+                com.opencheps.vision.MoveSequenceRecovery.recover(
+                        FenBuilder.flip(blackPrevious),
+                        FenBuilder.flip(blackCurrent), Side.WHITE);
+        assertNotNull(r);
+        assertEquals(Side.BLACK, r.second.mover);
+    }
+    @Test public void rejectsRecoveryForOneMoveOrWrongSide() {
+        char[][] a = initial(), b = copy(a);
+        b[6][4] = '.'; b[4][4] = 'P';
+        assertNull(com.opencheps.vision.MoveSequenceRecovery.recover(a,b,Side.WHITE));
+        b[1][6] = '.'; b[2][6] = 'p';
+        assertNull(com.opencheps.vision.MoveSequenceRecovery.recover(a,b,Side.BLACK));
+    }
+
 }
