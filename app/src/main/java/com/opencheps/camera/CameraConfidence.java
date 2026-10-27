@@ -16,6 +16,6 @@ public final class CameraConfidence {
         Arrays.sort(signal);
         // Lower quartile represents the weaker piece colour while resisting one bad crop.
         // Scaling only upwards also tightens the existing absolute error caps for faint pieces.
-        return Math.min(10f,Math.max(1f,.10f/Math.max(.005f,signal[8])));
+        return Math.min(10f,Math.max(1f,.10f/Math.max(.005f,signal[7])));
     }
 }

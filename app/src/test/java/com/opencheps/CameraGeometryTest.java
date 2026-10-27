@@ -16,4 +16,5 @@ public class CameraGeometryTest {
     @Test public void neverRelaxesAbsoluteErrorCaps(){assertEquals(1f,CameraConfidence.scale(signal(.4f)),.0001f);}
     @Test public void boundsFaintSignalAmplification(){assertEquals(10f,CameraConfidence.scale(signal(.001f)),.0001f);}
     @Test public void rejectsInvalidCalibrationScale(){float[][] c=signal(.02f);c[0][0]=Float.NaN;assertEquals(1f,CameraConfidence.scale(c),.0001f);}
+    @Test public void handlesFaintPiecesOnOneSquareColour(){float[][] c=signal(.2f);for(int i=0;i<8;i++)c[i][0]=.0125f;assertEquals(8f,CameraConfidence.scale(c),.0001f);}
 }
