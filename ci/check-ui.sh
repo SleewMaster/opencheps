@@ -26,6 +26,7 @@ if button is None:
 x1,y1,x2,y2=map(int,re.findall(r'\d+',button.attrib['bounds']))
 subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PY
+adb shell input swipe 360 1000 360 580 300
 adb shell uiautomator dump /sdcard/deep.xml
 adb pull /sdcard/deep.xml ui-proof/deep.xml
 python3 - <<'PY'
