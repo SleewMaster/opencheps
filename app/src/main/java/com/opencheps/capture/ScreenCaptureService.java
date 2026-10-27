@@ -81,6 +81,10 @@ public class ScreenCaptureService extends Service {
     private char[][] candidateGrid;
     private int candidateRepeats;
     private Side observedStm = Side.WHITE;
+    private String castlingRights = "KQkq";
+    private String enPassantTarget = "-";
+    private int halfmoveClock = 0, fullmoveNumber = 1;
+    private List<StockfishEngine.Pv> currentPvs = new ArrayList<>();
     private String lastEngineFen = "";
     private String lastDisplayedArrowFen = "";
     private int lostBoardCount = 0;
@@ -203,7 +207,12 @@ public class ScreenCaptureService extends Service {
         lastEngineFen = "";
         lastDisplayedArrowFen = "";
         observedStm = Side.WHITE;
+        castlingRights = "KQkq";
+        enPassantTarget = "-";
+        halfmoveClock = 0;
+        fullmoveNumber = 1;
         currentArrows.clear();
+        currentPvs.clear();
     }
 
     private final Runnable sampleLoop = new Runnable() {
@@ -328,22 +337,15 @@ public class ScreenCaptureService extends Service {
                     + " changes=" + m.changeCount);
 
             if (m.kind == MoveAnalyzer.Kind.UNKNOWN || m.mover == null) {
-                if (candidateRepeats >= 5) {
-                    char[][] forced = forceValidGrid(grid);
-                    if (forced != null) {
-                        confirmedGrid = forced;
-                        classifier.commitConfirmed(confirmedGrid, bmp, board);
-                        observedStm = userSide;
-                        candidateGrid = null;
-                        candidateRepeats = 0;
-                        panelStatus("Forced re-sync");
-                        if (observedStm == userSide) queryEngineAndRender(board, bmp);
-                    } else {
-                        panelStatus("Position unclear · " + m.changeCount + " changed");
-                    }
-                } else {
-                    panelStatus("Unclear change · " + m.changeCount + " sq");
-                }
+                // OCR can mistake highlights for pieces. Never silently switch
+                // to a guessed position or invent whose turn it is.
+                OverlayService.clearArrowsOnly();
+                currentArrows.clear();
+                currentPvs.clear();
+                lastEngineFen = "";
+                panelStatus(candidateRepeats >= 5
+                        ? "Position unclear · tap ↻ on a STARTING board"
+                        : "Checking board · " + m.changeCount + " changed");
                 return;
             }
 
@@ -354,6 +356,7 @@ public class ScreenCaptureService extends Service {
                 return;
             }
 
+            updatePositionMetadata(confirmedGrid, grid, m);
             confirmedGrid = grid;
             classifier.commitConfirmed(confirmedGrid, bmp, board);
             observedStm = m.mover == Side.WHITE ? Side.BLACK : Side.WHITE;
@@ -367,6 +370,7 @@ public class ScreenCaptureService extends Service {
             } else {
                 OverlayService.clearArrowsOnly();
                 currentArrows.clear();
+                currentPvs.clear();
                 lastDisplayedArrowFen = "";
                 panelStatus(observedStm + "'s turn — waiting");
                 panelEval("");
@@ -380,10 +384,49 @@ public class ScreenCaptureService extends Service {
         }
     }
 
-    private char[][] forceValidGrid(char[][] grid) {
-        FenBuilder.Validation v = FenBuilder.validate(
-                classifier.bootstrapSide() == Side.BLACK ? FenBuilder.flip(grid) : grid);
-        return v.ok ? grid : null;
+    /** Track castling and en-passant strictly across confirmed board changes. */
+    private void updatePositionMetadata(char[][] oldScreen, char[][] newScreen,
+                                        MoveAnalyzer.Result move) {
+        char[][] prev = classifier.bootstrapSide() == Side.BLACK
+                ? FenBuilder.flip(oldScreen) : oldScreen;
+        char[][] next = classifier.bootstrapSide() == Side.BLACK
+                ? FenBuilder.flip(newScreen) : newScreen;
+        StringBuilder rights = new StringBuilder();
+        if (castlingRights.contains("K") && prev[7][4] == 'K' && next[7][4] == 'K'
+                && prev[7][7] == 'R' && next[7][7] == 'R') rights.append('K');
+        if (castlingRights.contains("Q") && prev[7][4] == 'K' && next[7][4] == 'K'
+                && prev[7][0] == 'R' && next[7][0] == 'R') rights.append('Q');
+        if (castlingRights.contains("k") && prev[0][4] == 'k' && next[0][4] == 'k'
+                && prev[0][7] == 'r' && next[0][7] == 'r') rights.append('k');
+        if (castlingRights.contains("q") && prev[0][4] == 'k' && next[0][4] == 'k'
+                && prev[0][0] == 'r' && next[0][0] == 'r') rights.append('q');
+        castlingRights = rights.length() == 0 ? "-" : rights.toString();
+
+        enPassantTarget = "-";
+        boolean pawnMoved = false, captured = false;
+        char pawn = move.mover == Side.WHITE ? 'P' : 'p';
+        for (int r = 0; r < 8; r++) {
+            for (int f = 0; f < 8; f++) {
+                char before = prev[r][f], after = next[r][f];
+                if (before == pawn && after != pawn) pawnMoved = true;
+                if (before != '.' && before != after
+                        && Character.isUpperCase(before) != (move.mover == Side.WHITE)) {
+                    captured = true;
+                }
+            }
+        }
+        int from = move.mover == Side.WHITE ? 6 : 1;
+        int to = move.mover == Side.WHITE ? 4 : 3;
+        for (int f = 0; f < 8; f++) {
+            if (prev[from][f] == pawn && next[from][f] == '.'
+                    && prev[to][f] == '.' && next[to][f] == pawn) {
+                enPassantTarget = "" + (char)('a' + f)
+                        + (move.mover == Side.WHITE ? "3" : "6");
+                break;
+            }
+        }
+        halfmoveClock = pawnMoved || captured ? 0 : halfmoveClock + 1;
+        if (move.mover == Side.BLACK) fullmoveNumber++;
     }
 
     private void queryEngineAndRender(BoardDetector.Board board, Bitmap currentBitmap) {
@@ -395,7 +438,8 @@ public class ScreenCaptureService extends Service {
             panelStatus("Invalid: " + v.reason);
             return;
         }
-        String fen = FenBuilder.build(confirmedGrid, classifier.bootstrapSide(), userSide);
+        String fen = FenBuilder.build(confirmedGrid, classifier.bootstrapSide(), userSide,
+                castlingRights, enPassantTarget, halfmoveClock, fullmoveNumber);
         if (fen == null) { panelStatus("FEN build failed"); return; }
         if (fen.equals(lastEngineFen)) {
             repushCurrentArrows(board);
@@ -410,8 +454,14 @@ public class ScreenCaptureService extends Service {
             long t0 = System.currentTimeMillis();
             List<StockfishEngine.Pv> pvs = engine.topMoves(fen, think, multiPv);
             long dt = System.currentTimeMillis() - t0;
-            if (pvs.isEmpty()) { panelStatus("No legal move"); return; }
-            currentArrows = buildArrows(pvs, board);
+            if (pvs.isEmpty()) {
+                currentArrows.clear();
+                currentPvs.clear();
+                OverlayService.clearArrowsOnly();
+                panelStatus("No legal move"); return;
+            }
+            currentPvs = new ArrayList<>(pvs);
+            currentArrows = buildArrows(currentPvs, board);
             lastDisplayedArrowFen = fen;
             OverlayService.pushArrows(currentArrows, boardBoundsOnScreen(board));
             StockfishEngine.Pv best = pvs.get(0);
@@ -422,18 +472,23 @@ public class ScreenCaptureService extends Service {
             panelStatus("Your move (" + dt + " ms)");
         } catch (Exception e) {
             Log.w(TAG, "engine query failed", e);
-            panelStatus("Engine query failed");
+            lastEngineFen = "";
+            currentArrows.clear();
+            currentPvs.clear();
+            OverlayService.clearArrowsOnly();
+            panelStatus("Engine query failed · retrying");
         }
     }
 
     private void repushCurrentArrows(BoardDetector.Board board) {
         if (currentArrows == null || currentArrows.isEmpty()) return;
-        List<ArrowOverlayView.Arrow> rebuilt = rebuildArrowsForNewBounds(board);
-        OverlayService.pushArrows(rebuilt, boardBoundsOnScreen(board));
+        currentArrows = rebuildArrowsForNewBounds(board);
+        OverlayService.pushArrows(currentArrows, boardBoundsOnScreen(board));
     }
 
     private List<ArrowOverlayView.Arrow> rebuildArrowsForNewBounds(BoardDetector.Board board) {
-        return currentArrows;
+        // Recompute absolute arrow coordinates when the board is relocated.
+        return buildArrows(currentPvs, board);
     }
 
     private List<ArrowOverlayView.Arrow> buildArrows(
@@ -497,7 +552,8 @@ public class ScreenCaptureService extends Service {
 
     private String fenOf(char[][] grid) {
         if (grid == null) return "";
-        String f = FenBuilder.build(grid, classifier.bootstrapSide(), userSide);
+        String f = FenBuilder.build(grid, classifier.bootstrapSide(), userSide,
+                castlingRights, enPassantTarget, halfmoveClock, fullmoveNumber);
         return f == null ? "" : f;
     }
 
