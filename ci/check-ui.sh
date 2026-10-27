@@ -39,6 +39,7 @@ adb shell appops set com.opencheps.bottrainer SYSTEM_ALERT_WINDOW allow
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.OverlayTestActivity --es mode overlay
 sleep 1
 adb shell am start -W -n com.opencheps.touchprobe/.ProbeActivity
+sleep 2
 adb shell uiautomator dump /sdcard/overlay.xml
 adb pull /sdcard/overlay.xml ui-proof/overlay.xml
 python3 - <<'PY'
