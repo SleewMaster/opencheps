@@ -3,7 +3,7 @@ set -euo pipefail
 mkdir -p ui-proof
 adb shell wm size 720x1280
 adb shell wm density 280
-adb install -r app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+adb install -r -g app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
 sleep 2
 adb shell uiautomator dump /sdcard/main.xml
@@ -79,7 +79,7 @@ adb pull /sdcard/select.xml ui-proof/select.xml
 adb exec-out screencap -p > ui-proof/selection.png
 python3 - <<'PY'
 import xml.etree.ElementTree as E,re,subprocess
-nodes=list(E.parse('ui-proof/select.xml').iter('node'));b=next(n for n in nodes if n.get('text')=='Применить');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
+nodes=list(E.parse('ui-proof/select.xml').iter('node'));b=next(n for n in nodes if n.get('text','').casefold()=='применить');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
 subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PY
 adb shell uiautomator dump /sdcard/frame.xml

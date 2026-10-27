@@ -169,7 +169,7 @@ public class FloatingPanel {
         int[] xy=new int[2];root.getLocationOnScreen(xy);
         bounds=new android.graphics.Rect(xy[0],xy[1],xy[0]+root.getWidth(),xy[1]+root.getHeight());
     }
-    public android.graphics.Rect screenBounds(){return bounds==null?null:new android.graphics.Rect(bounds);}
+    public android.graphics.Rect screenBounds(){android.graphics.Rect b=bounds;return b==null?null:new android.graphics.Rect(b);}
     public void setVisible(boolean visible) {
         if(root!=null){root.setVisibility(visible?View.VISIBLE:View.INVISIBLE);root.post(this::updateBounds);}
     }

@@ -26,8 +26,15 @@ jobs:
       - name: Cache debug signing identity
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: opencheps-bot-debug-identity-v1
+          path: .signing/debug.keystore
+          key: opencheps-bot-debug-identity-v2
+
+      - name: Ensure persistent debug signing key
+        run: |
+          mkdir -p .signing
+          if [ ! -f .signing/debug.keystore ]; then
+            keytool -genkeypair -noprompt -keystore .signing/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=OpenCheps Bot Debug,O=OpenCheps,C=US'
+          fi
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3

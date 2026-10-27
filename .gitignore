@@ -9,3 +9,6 @@ captures/
 .cxx/
 app/src/main/jniLibs/*/libstockfish.so
 sf-cache/
+
+
+.signing/
