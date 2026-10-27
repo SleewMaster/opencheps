@@ -75,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
         int pv    = sp.getInt(Prefs.KEY_MULTIPV, 3);
         String side = sp.getString(Prefs.KEY_USER_SIDE, "w");
 
-        thinkBar.setMax(3000);
+        thinkBar.setMax(5000);
         thinkBar.setProgress(think);
         multiPvBar.setMax(2);
         multiPvBar.setProgress(pv - 1);
@@ -125,11 +125,11 @@ public class MainActivity extends AppCompatActivity {
 
     private String thinkLabelText(int ms) {
         String strength;
-        if (ms < 500)       strength = "fast (≈2200 elo)";
-        else if (ms < 1000) strength = "balanced (≈2700 elo)";
-        else if (ms < 2000) strength = "strong (≈3000 elo)";
-        else                strength = "max (≈3300+ elo)";
-        return "Think time: " + ms + " ms — " + strength;
+        if (ms < 700)       strength = "fast";
+        else if (ms < 2000) strength = "balanced";
+        else if (ms < 3500) strength = "deep";
+        else                strength = "thorough";
+        return "Analysis time: " + ms + " ms — " + strength;
     }
 
     @Override protected void onResume() {
