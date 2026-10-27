@@ -54,31 +54,46 @@ public class ArrowOverlayView extends View {
         labelBg.setColor(0xCC000000);
     }
 
+    // ScreenCaptureService invokes these methods from a worker thread. All
+    // mutations must run on the View/UI thread to avoid ConcurrentModification
+    // while onDraw iterates over arrows.
     public void setArrows(List<Arrow> a) {
-        arrows.clear();
-        if (a != null) arrows.addAll(a);
-        postInvalidate();
+        final List<Arrow> snapshot = a == null ? new ArrayList<>() : new ArrayList<>(a);
+        post(() -> {
+            arrows.clear();
+            arrows.addAll(snapshot);
+            invalidate();
+        });
     }
 
     public void setBoardBounds(Rect r) {
-        boardBounds = r;
-        postInvalidate();
+        final Rect snapshot = r == null ? null : new Rect(r);
+        post(() -> {
+            boardBounds = snapshot;
+            invalidate();
+        });
     }
 
     public void setBoardFrameColor(int c) {
-        boardFrameColor = c;
-        postInvalidate();
+        post(() -> {
+            boardFrameColor = c;
+            invalidate();
+        });
     }
 
     public void clearArrowsOnly() {
-        arrows.clear();
-        postInvalidate();
+        post(() -> {
+            arrows.clear();
+            invalidate();
+        });
     }
 
     public void clearAll() {
-        arrows.clear();
-        boardBounds = null;
-        postInvalidate();
+        post(() -> {
+            arrows.clear();
+            boardBounds = null;
+            invalidate();
+        });
     }
 
     @Override protected void onDraw(Canvas c) {
