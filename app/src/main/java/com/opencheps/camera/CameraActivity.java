@@ -81,8 +81,10 @@ public class CameraActivity extends AppCompatActivity {
                 camera.getCameraControl().startFocusAndMetering(new FocusMeteringAction.Builder(point).setAutoCancelDuration(3,TimeUnit.SECONDS).build());v.performClick();
             }return true;
         });
-        status=text("Разреши камеру и выставь углы доски",12,0xff93a8c3);status.setMinHeight(dp(38));status.setGravity(Gravity.CENTER_VERTICAL);root.addView(status);
-        moveLabel=text("Подсказка появится здесь",21,0xffeaf2ff);moveLabel.setPadding(0,0,0,dp(6));root.addView(moveLabel);
+        // Fixed line counts keep status changes from resizing the preview and invalidating
+        // its calibrated corners, including on small displays and with larger system fonts.
+        status=text("Разреши камеру и выставь углы доски",12,0xff93a8c3);status.setLines(3);status.setGravity(Gravity.CENTER_VERTICAL);root.addView(status);
+        moveLabel=text("Подсказка появится здесь",21,0xffeaf2ff);moveLabel.setSingleLine(true);moveLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);moveLabel.setPadding(0,0,0,dp(6));root.addView(moveLabel);
         LinearLayout buttons=new LinearLayout(this);root.addView(buttons);
         orientation=button("Снизу: белые");buttons.addView(orientation,new LinearLayout.LayoutParams(0,dp(52),1));orientation.setOnClickListener(v->{perspective=perspective==Side.WHITE?Side.BLACK:Side.WHITE;orientation.setText(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");reset(true);});
         apply=button("Начать");buttons.addView(apply,new LinearLayout.LayoutParams(0,dp(52),1));apply.setOnClickListener(v->{

@@ -69,7 +69,8 @@ public final class CameraBoardView extends View {
         int ff=move.charAt(0)-'a',fr='8'-move.charAt(1),tf=move.charAt(2)-'a',tr='8'-move.charAt(3);
         if(perspective==Side.BLACK){ff=7-ff;fr=7-fr;tf=7-tf;tr=7-tr;}
         float sx=(ff+.5f)*80,sy=(fr+.5f)*80,ex=(tf+.5f)*80,ey=(tr+.5f)*80;
-        float dx=ex-sx,dy=ey-sy,len=(float)Math.hypot(dx,dy),ux=dx/len,uy=dy/len,px=-uy,py=ux;
+        float dx=ex-sx,dy=ey-sy,len=(float)Math.hypot(dx,dy);if(len<1)return;
+        float ux=dx/len,uy=dy/len,px=-uy,py=ux;
         int color=new int[]{0xffb9f66e,0xff67d7ff,0xffffc566}[Math.min(index,2)];
         paint.setStyle(Paint.Style.STROKE);paint.setColor(color);paint.setStrokeWidth(index==0?3.5f:2);
         c.drawRoundRect(ex-34,ey-34,ex+34,ey+34,10,10,paint);
