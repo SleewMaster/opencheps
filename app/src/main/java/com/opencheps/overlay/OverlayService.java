@@ -130,7 +130,8 @@ public class OverlayService extends Service {
             android.widget.FrameLayout.LayoutParams bp=new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
             s.selector.addView(buttons,bp);
             WindowManager.LayoutParams sp=new WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,PixelFormat.TRANSLUCENT);
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);
+            s.selector.setFitsSystemWindows(true);
             sp.gravity=Gravity.TOP|Gravity.START;
             try{s.wm.addView(s.selector,sp);}catch(Exception e){s.closeSelector();}
         });
