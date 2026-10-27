@@ -72,6 +72,9 @@ jobs:
           cp sf-cache/libstockfish-armv7.so  app/src/main/jniLibs/armeabi-v7a/libstockfish.so
           ls -la app/src/main/jniLibs/*/
 
+      - name: Run chess logic regression tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build debug APK splits
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
