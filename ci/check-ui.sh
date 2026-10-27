@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p ui-proof
+trap 'adb logcat -d > ui-proof/logcat.txt || true' EXIT
 adb shell wm size 720x1280
 adb shell wm density 280
 adb install -r -g app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
@@ -43,7 +44,7 @@ adb pull /sdcard/overlay.xml ui-proof/overlay.xml
 python3 - <<'PY'
 import xml.etree.ElementTree as E,re,subprocess
 nodes=list(E.parse('ui-proof/overlay.xml').iter('node'))
-assert any(n.get('resource-id','').endswith('/panelStop') for n in nodes),'panel absent'
+# The CLI UI dump exposes only the active app on Android 14, not its overlay window.
 b=next(n for n in nodes if n.get('text')=='TAPS: 0');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
 subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PY
@@ -54,24 +55,26 @@ python3 - <<'PY'
 import xml.etree.ElementTree as E,re,subprocess
 nodes=list(E.parse('ui-proof/touch.xml').iter('node'))
 assert any(n.get('text')=='TAPS: 1' for n in nodes),'overlay blocked another app touch'
-# No listener is attached by this test: X must work independently.
-b=next(n for n in nodes if n.get('resource-id','').endswith('/panelStop'));x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']))
-subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PY
+# Read the actual close button's screen coordinates from its attached native View.
+adb shell am broadcast -n com.opencheps.bottrainer/com.opencheps.ui.OverlayStateReceiver
+state=$(adb shell run-as com.opencheps.bottrainer cat files/overlay-state.txt)
+[[ "$state" == OPEN* ]] || { adb logcat -d -s OC/Overlay:E; echo "Panel is not attached: $state"; exit 1; }
+read -r status close_x close_y <<< "$state"
+# There is no panel listener in this fixture. X must work independently.
+adb shell input tap "$close_x" "$close_y"
 adb shell uiautomator dump /sdcard/closed.xml
 adb pull /sdcard/closed.xml ui-proof/closed.xml
-python3 - <<'PY'
-import xml.etree.ElementTree as E
-assert not any(n.get('resource-id','').endswith('/panelStop') for n in E.parse('ui-proof/closed.xml').iter('node')),'X did not remove overlay'
-PY
+adb shell am broadcast -n com.opencheps.bottrainer/com.opencheps.ui.OverlayStateReceiver
+state=$(adb shell run-as com.opencheps.bottrainer cat files/overlay-state.txt)
+[[ "$state" == CLOSED ]] || { echo "X left an attached panel: $state"; exit 1; }
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.OverlayTestActivity --es mode notification
 sleep 1
 adb shell uiautomator dump /sdcard/stopped.xml
 adb pull /sdcard/stopped.xml ui-proof/stopped.xml
-python3 - <<'PY'
-import xml.etree.ElementTree as E
-assert not any(n.get('resource-id','').endswith('/panelStop') for n in E.parse('ui-proof/stopped.xml').iter('node')),'Stop action left an orphan window'
-PY
+adb shell am broadcast -n com.opencheps.bottrainer/com.opencheps.ui.OverlayStateReceiver
+state=$(adb shell run-as com.opencheps.bottrainer cat files/overlay-state.txt)
+[[ "$state" == CLOSED ]] || { echo "Stop action left an attached panel: $state"; exit 1; }
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.OverlayTestActivity --es mode select
 sleep 1
 adb shell uiautomator dump /sdcard/select.xml

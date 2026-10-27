@@ -24,6 +24,7 @@ jobs:
           java-version: '17'
 
       - name: Cache debug signing identity
+        id: signing-cache
         uses: actions/cache@v4
         with:
           path: .signing/debug.keystore
@@ -35,6 +36,13 @@ jobs:
           if [ ! -f .signing/debug.keystore ]; then
             keytool -genkeypair -noprompt -keystore .signing/debug.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=OpenCheps Bot Debug,O=OpenCheps,C=US'
           fi
+
+      - name: Retain signing key before validation
+        if: steps.signing-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .signing/debug.keystore
+          key: opencheps-bot-debug-identity-v2
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
