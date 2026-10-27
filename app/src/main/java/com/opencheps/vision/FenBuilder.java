@@ -41,6 +41,9 @@ public class FenBuilder {
     }
 
     public static Validation validate(char[][] g) {
+        if (g == null || g.length != 8) return new Validation(false, "invalid board height");
+        for (char[] row : g) if (row == null || row.length != 8)
+            return new Validation(false, "invalid board width");
         int wK = 0, bK = 0, wP = 0, bP = 0;
         int wN = 0, bN = 0, wB = 0, bB = 0, wR = 0, bR = 0, wQ = 0, bQ = 0;
         for (int r = 0; r < 8; r++) {
@@ -53,6 +56,8 @@ public class FenBuilder {
                 else if (c == 'B') wB++; else if (c == 'b') bB++;
                 else if (c == 'R') wR++; else if (c == 'r') bR++;
                 else if (c == 'Q') wQ++; else if (c == 'q') bQ++;
+                else if (c != '.' && c != 0)
+                    return new Validation(false, "unknown piece: " + c);
             }
         }
         if (wK != 1) return new Validation(false, "wK=" + wK);
