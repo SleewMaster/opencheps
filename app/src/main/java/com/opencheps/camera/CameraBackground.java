@@ -20,8 +20,8 @@ public final class CameraBackground {
                 for(int c=0;c<3;c++)error=Math.max(error,Math.abs(current[i][c]-reference[i][c]-offset[c]));
                 if(error>42)badCorners++;
             }
-            // Two last-move highlight squares are allowed; a larger covered region is not.
-            if(badCorners>=2&&++badCells>2)return false;
+            // Two last-move squares plus a checked king may legitimately change colour.
+            if(badCorners>=2&&++badCells>3)return false;
         }return true;
     }
     private static float[][] sample(int[] pixels,int width,int height){
