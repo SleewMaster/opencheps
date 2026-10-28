@@ -36,6 +36,7 @@ public class CameraActivity extends AppCompatActivity {
     private Side perspective=Side.WHITE;
     private boolean active,processing,paused,engineReady,engineFailed,analysisBusy,streaming,destroyed;
     private int generation;
+    private final CameraAdviceGuard adviceGuard=new CameraAdviceGuard();
     private String verifiedFen="",displayFen="";
     private List<StockfishEngine.Pv> displayed=Collections.emptyList();
     private Side userSide;
@@ -64,7 +65,7 @@ public class CameraActivity extends AppCompatActivity {
         Button back=button("‹ Назад");top.addView(back,new LinearLayout.LayoutParams(dp(90),dp(48)));back.setOnClickListener(v->finish());
         TextView title=text("КАМЕРА  /  LIVE",14,0xffb9f66e);title.setGravity(Gravity.CENTER);top.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));
         Button close=button("Закрыть");top.addView(close,new LinearLayout.LayoutParams(dp(86),dp(48)));close.setOnClickListener(v->finish());
-        TextView help=text("2D-доска на другом экране · начальная расстановка. Перетащи углы 1–4 по часовой стрелке, начиная с верхнего левого. Закрепи телефон.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
+        TextView help=text("2D-доска другого экрана · начальная расстановка. Выставь углы 1–4 от верхнего левого. Лёгкое дрожание отслеживается автоматически; держи доску целиком в кадре.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
         FrameLayout stage=new FrameLayout(this);root.addView(stage,new LinearLayout.LayoutParams(-1,0,1));
         preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FILL_CENTER);stage.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         boardView=new CameraBoardView(this);stage.addView(boardView,new FrameLayout.LayoutParams(-1,-1));
@@ -120,23 +121,38 @@ public class CameraActivity extends AppCompatActivity {
         if(apply!=null)apply.setText("Начать");
         if(status!=null)status.setText("Выставь углы на начальной позиции. Снизу должен быть выбранный цвет.");
     }
-    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayed=Collections.emptyList();engine.cancelSearch();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
+    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
+    private void suspendAdvice(boolean hide){
+        // Keep the last verified FEN's completed analysis cached, but prevent new engine
+        // results from being displayed until the position is visually verified again.
+        generation++;verifiedFen="";engine.cancelSearch();
+        if(hide){boardView.clear();moveLabel.setText("Стабилизирую изображение…");}
+        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){boardView.clear();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
+    }
     private final Runnable tick=new Runnable(){@Override public void run(){
-        if(!active||destroyed)return;main.postDelayed(this,450);
+        if(!active||destroyed)return;main.postDelayed(this,220);
         if(paused||processing||board==null||boardView.editing()||!streaming)return;
         Bitmap frame=preview.getBitmap();if(frame==null){invalidateAdvice();return;}
         final int token=generation;final CameraBoard session=board;final float[] corners=boardView.corners();processing=true;
         vision.execute(()->{
-            ChessPosition position=null;Bitmap rectified=null;
-            try{rectified=CameraBoard.rectify(frame,corners);if(rectified!=null)position=session.read(rectified);}catch(RuntimeException e){android.util.Log.w("OC/Camera","frame rejected",e);}
-            finally{frame.recycle();if(rectified!=null)rectified.recycle();}
-            ChessPosition answer=position;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
+            CameraBoard.FrameResult result=null;
+            try{result=session.readFrame(frame,corners);}catch(RuntimeException e){android.util.Log.w("OC/Camera","frame rejected",e);}
+            finally{frame.recycle();}
+            CameraBoard.FrameResult observation=result;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
+                if(observation!=null&&observation.corners!=null)boardView.setTrackedCorners(observation.corners);
+                ChessPosition answer=observation==null?null:observation.position;
                 if(answer==null){
-                    if(!verifiedFen.isEmpty())invalidateAdvice();
-                    status.setText("Проверяю доску · без бликов, руки и движения. Для старта нужна начальная позиция.");return;
+                    boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
+                    boolean hold=adviceGuard.failure(SystemClock.uptimeMillis(),!hardLoss,!hardLoss,observation!=null&&observation.pendingChange);
+                    suspendAdvice(!hold);
+                    status.setText(hardLoss?"Доска потеряна или сильно смазана. Верни её в рамку; при большом сдвиге выставь углы заново.":"Стабилизирую кадр · для старта нужна начальная расстановка");return;
                 }
+                adviceGuard.verified(SystemClock.uptimeMillis());
                 String fen=CameraBoard.fen(answer);
-                if(!fen.equals(verifiedFen)){invalidateAdvice();verifiedFen=fen;}
+                if(!fen.equals(verifiedFen)){
+                    generation++;engine.cancelSearch();verifiedFen=fen;
+                    if(!fen.equals(displayFen)){displayFen="";displayed=Collections.emptyList();boardView.clear();moveLabel.setText("Подсказка появится здесь");}
+                }
                 if(answer.turn!=userSide){status.setText("Жду ход соперника · доска распознана");return;}
                 if(fen.equals(displayFen)&&!displayed.isEmpty()){boardView.setMoves(displayed,perspective);return;}
                 if(!engineReady){status.setText(engineFailed?"Stockfish недоступен — открой режим заново":"Запускаю Stockfish…");return;}

@@ -11,9 +11,36 @@ public final class CameraBoard {
     private final FrameConsensus consensus=new FrameConsensus();
     private ChessPosition position;
     private float confidenceScale=1;
+    private final BoardMotionTracker motion=new BoardMotionTracker();
+    private int[] cameraPixels;
+    private boolean pendingChange;
     private final Side perspective;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
     public CameraBoard(Side perspective){this.perspective=perspective;}
+    public static final class FrameResult {
+        public final ChessPosition position;
+        public final float[] corners;
+        public final boolean tracked,readable,pendingChange;
+        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending){position=p;corners=c;this.tracked=tracked;this.readable=readable;pendingChange=pending;}
+    }
+    /** The same tracked corners rectify the sampled frame and place the displayed hints. */
+    public FrameResult readFrame(Bitmap frame,float[] corners) {
+        int w=frame.getWidth(),h=frame.getHeight();
+        if(w<2||h<2)return new FrameResult(null,null,false,false,false);
+        if(cameraPixels==null||cameraPixels.length!=w*h)cameraPixels=new int[w*h];
+        frame.getPixels(cameraPixels,0,w,0,0,w,h);
+        BoardMotionTracker.Frame gray=BoardMotionTracker.Frame.fromArgb(cameraPixels,w,h,480);
+        float sx=gray.width/(float)w,sy=gray.height/(float)h;
+        float[] scaled=corners.clone();for(int i=0;i<4;i++){scaled[i*2]*=sx;scaled[i*2+1]*=sy;}
+        BoardMotionTracker.Result tracked=motion.update(gray,scaled);
+        if(tracked==null){consensus.accept(null);return new FrameResult(null,null,false,false,false);}
+        float[] real=tracked.corners.clone();for(int i=0;i<4;i++){real[i*2]/=sx;real[i*2+1]/=sy;}
+        if(!tracked.readable()){consensus.accept(null);return new FrameResult(null,real,true,false,false);}
+        Bitmap square=rectify(frame,real);
+        if(square==null){consensus.accept(null);return new FrameResult(null,null,false,false,false);}
+        try {ChessPosition p=read(square);return new FrameResult(p,real,true,true,pendingChange);}
+        finally {square.recycle();}
+    }
     public static Bitmap rectify(Bitmap source,float[] corners) {
         if(!CameraGeometry.valid(corners,source.getWidth(),source.getHeight()))return null;
         Matrix m=new Matrix();
@@ -29,6 +56,7 @@ public final class CameraBoard {
         out.recycle();small.recycle();return filtered;
     }
     public ChessPosition read(Bitmap rectified) {
+        pendingChange=false;
         if(!classifier.isTrained()) {
             if(!classifier.tryBootstrap(rectified,bounds))return null;
             // Reject a disagreement rather than attaching opposite labels to the templates.
@@ -45,6 +73,7 @@ public final class CameraBoard {
         }
         VisualMoveTracker.Match match=VisualMoveTracker.match(position,canonical);
         if(match==null){consensus.accept(null);return null;}
+        pendingChange=match.plies>0;
         String key=fen(match.position);
         if(!consensus.accept(key))return null;
         position=match.position;

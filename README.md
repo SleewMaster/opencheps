@@ -1,4 +1,4 @@
-# OpenCheps Bot 0.6.0
+# OpenCheps Bot 0.7.0 development
 
 **[Скачать APK 0.6.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.6.0/OpenCheps_Bot_0.6.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.6.0)**
 
@@ -12,9 +12,11 @@ Grant display-over-apps and full-screen capture permissions, show a flat 2D ches
 
 ## Camera
 
-Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, in the initial position. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the phone stationary, ideally in a stand; tap the image to focus after calibration. **Углы заново** resets calibration for a new board or moved phone.
+Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, in the initial position. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the board fully visible; tap the image to focus after calibration. **Углы заново** resets calibration for a new board or moved phone.
 
-The selected quadrilateral is rectified to a 640 × 640 board before template recognition. Legal positions, including two missed plies, are considered; two consecutive matching frames are required to accept a position. Uncertain frames hide advice. Hints are projected back into the camera preview using the same four corners. Preview sampling excludes the app's own drawn hints.
+The selected quadrilateral is rectified to a 640 × 640 board before template recognition. Legal positions, including two missed plies, are considered; two clear matching observations are required to accept a position. Uncertain frames hide advice. Hints are projected back into the camera preview using the same four corners. Preview sampling excludes the app's own drawn hints.
+
+Camera hand-shake stabilization registers grid intersections against a fixed reference using robust projective fitting. The same tracked corners rectify frames and draw hints. Small translations, rotation, zoom and perspective changes are followed; excessive motion, leaving the frame and severe blur require reframing. Two clear matching observations may bridge one dropped frame. New engine output is blocked during uncertainty; one soft failure may keep a verified arrow for at most 450 ms, while detected move candidates or lost geometry hide it immediately. Completed advice can be reused only after its FEN is verified again. Sampling interval: 220 ms, with actual latency dependent on device speed.
 
 Camera stops when the activity leaves the foreground. Returning clears old hints; changing size/orientation or recreating the activity requires calibration again. No frames are saved or uploaded. There is no microphone or network permission.
 

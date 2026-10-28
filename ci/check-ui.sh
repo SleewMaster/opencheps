@@ -163,7 +163,7 @@ assert any(n.get('resource-id','').endswith('/sourceCamera') and n.get('checked'
 assert not any(n.get('text')=='КАМЕРА  /  LIVE' for n in nodes)
 PYUI
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
-for attempt in $(seq 1 45); do
+for attempt in $(seq 1 120); do
  result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
  if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
  if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
@@ -172,7 +172,7 @@ for attempt in $(seq 1 45); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 # Denied permission must leave a usable camera screen and a working exit.

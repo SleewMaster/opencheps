@@ -19,6 +19,7 @@ public final class CameraBoardView extends View {
     public Runnable onSizeChanged;
     public CameraBoardView(Context c){super(c);setContentDescription("Четыре угла доски: перетащи маркеры к углам");}
     public float[] corners(){return corners.clone();}
+    public void setTrackedCorners(float[] value){if(!editing&&CameraGeometry.valid(value,getWidth(),getHeight())){System.arraycopy(value,0,corners,0,8);invalidate();}}
     public boolean editing(){return editing;}
     public void setEditing(boolean value){editing=value;moves=Collections.emptyList();invalidate();}
     public void setMoves(List<StockfishEngine.Pv> values,Side side){moves=new ArrayList<>(values);perspective=side;invalidate();}

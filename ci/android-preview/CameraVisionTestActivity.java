@@ -8,7 +8,7 @@ public class CameraVisionTestActivity extends Activity {
     private static final String[] START={"rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"};
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
-        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
+        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
     private int check(){int passed=0;
@@ -36,6 +36,42 @@ public class CameraVisionTestActivity extends Activity {
         }return passed;
     }
     private void save(Bitmap b,String name){try(FileOutputStream o=new FileOutputStream(new File(getFilesDir(),name))){b.compress(Bitmap.CompressFormat.PNG,100,o);}catch(IOException e){throw new RuntimeException(e);}}
+    private int checkShake(){int passed=0;
+        for(int theme=0;theme<THEMES.length;theme++)for(boolean flipped:new boolean[]{false,true}){
+            float[] anchor={120,80,660,140,700,720,60,760};
+            char[][] start=new char[8][];for(int r=0;r<8;r++)start[r]=START[r].toCharArray();
+            char[][] e4=ChessPosition.copy(start);e4[6][4]='.';e4[4][4]='P';
+            char[][] e5=ChessPosition.copy(e4);e5[1][4]='.';e5[3][4]='p';
+            CameraBoard session=new CameraBoard(flipped?Side.BLACK:Side.WHITE);
+            for(int ply=0;ply<3;ply++){
+                char[][] expected=ply==0?start:ply==1?e4:e5;
+                Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(expected):expected,THEMES[theme]);
+                for(int repeat=0;repeat<2;repeat++){
+                    int step=ply*2+repeat;float[] actual=shaken(anchor,step);
+                    Bitmap shot=photograph(raw,actual,step>0);
+                    if((step&1)!=0){Bitmap small=Bitmap.createScaledBitmap(shot,640,672,true),soft=Bitmap.createScaledBitmap(small,800,840,true);shot.recycle();small.recycle();shot=soft;}
+                    CameraBoard.FrameResult result=session.readFrame(shot,anchor);
+                    if(!result.tracked||result.corners==null) {save(shot,"camera-photo.png");throw new AssertionError("shake geometry theme="+theme+" flipped="+flipped+" step="+step);}
+                    for(int i=0;i<4;i++)if(Math.hypot(result.corners[i*2]-actual[i*2],result.corners[i*2+1]-actual[i*2+1])>3){save(shot,"camera-photo.png");throw new AssertionError("shake alignment theme="+theme+" flipped="+flipped+" step="+step+" corners="+java.util.Arrays.toString(result.corners));}
+                    if(repeat==1&&(result.position==null||!java.util.Arrays.deepEquals(result.position.board,expected))){
+                        Bitmap square=CameraBoard.rectify(shot,result.corners);save(square,"camera-failed.png");save(shot,"camera-photo.png");String diagnostic=diagnose(session,square,flipped);square.recycle();
+                        throw new AssertionError("shake recognition theme="+theme+" flipped="+flipped+" ply="+ply+diagnostic);
+                    }shot.recycle();
+                }raw.recycle();passed++;
+            }
+            Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(e5):e5,THEMES[theme]);
+            float[] actual=shaken(anchor,5);Bitmap clear=photograph(raw,actual,true),covered=clear.copy(Bitmap.Config.ARGB_8888,true);Canvas canvas=new Canvas(covered);Paint hand=new Paint();hand.setColor(0xffa98367);canvas.drawRect(250,200,430,430,hand);
+            if(session.readFrame(covered,anchor).position!=null)throw new AssertionError("hand occlusion accepted");
+            CameraBoard.FrameResult recovered=session.readFrame(clear,anchor);if(recovered.position==null)recovered=session.readFrame(clear,anchor);
+            if(recovered.position==null||!java.util.Arrays.deepEquals(recovered.position.board,e5))throw new AssertionError("did not recover after hand");
+            raw.recycle();clear.recycle();covered.recycle();
+        }return passed;
+    }
+    private float[] shaken(float[] corners,int step){
+        if(step==0)return corners.clone();
+        double angle=Math.toRadians(Math.sin(step*1.2)*.65),scale=1+Math.cos(step*.8)*.004,dx=Math.sin(step)*7,dy=Math.cos(step*.9)*5;
+        float[] p=new float[8];for(int i=0;i<4;i++){double x=corners[i*2]-400,y=corners[i*2+1]-420;p[i*2]=(float)(400+scale*(Math.cos(angle)*x-Math.sin(angle)*y)+dx);p[i*2+1]=(float)(420+scale*(Math.sin(angle)*x+Math.cos(angle)*y)+dy);}return p;
+    }
     private String diagnose(CameraBoard tracker,Bitmap square,boolean flipped){try{
         java.lang.reflect.Field cf=CameraBoard.class.getDeclaredField("classifier"),pf=CameraBoard.class.getDeclaredField("position");cf.setAccessible(true);pf.setAccessible(true);
         PieceClassifier classifier=(PieceClassifier)cf.get(tracker);ChessPosition old=(ChessPosition)pf.get(tracker);
