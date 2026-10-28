@@ -14,6 +14,9 @@ public final class CameraBoard {
     private final BoardMotionTracker motion=new BoardMotionTracker();
     private int[] cameraPixels;
     private boolean pendingChange;
+    private boolean covered;
+    private CameraBackground background;
+    private final int[] boardPixels=new int[SIZE*SIZE];
     private final Side perspective;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
     public CameraBoard(Side perspective){this.perspective=perspective;}
@@ -38,7 +41,7 @@ public final class CameraBoard {
         if(!tracked.readable()){consensus.accept(null);return new FrameResult(null,real,true,false,false);}
         Bitmap square=rectify(frame,real);
         if(square==null){consensus.accept(null);return new FrameResult(null,null,false,false,false);}
-        try {ChessPosition p=read(square);return new FrameResult(p,real,true,true,pendingChange);}
+        try {ChessPosition p=read(square);return new FrameResult(p,real,true,!covered,pendingChange);}
         finally {square.recycle();}
     }
     public static Bitmap rectify(Bitmap source,float[] corners) {
@@ -57,14 +60,19 @@ public final class CameraBoard {
     }
     public ChessPosition read(Bitmap rectified) {
         pendingChange=false;
+        covered=false;
         if(!classifier.isTrained()) {
             if(!classifier.tryBootstrap(rectified,bounds))return null;
             // Reject a disagreement rather than attaching opposite labels to the templates.
             if(classifier.bootstrapSide()!=perspective){classifier.reset();return null;}
             confidenceScale=CameraConfidence.scale(classifier.labelCosts(rectified,bounds));
+            rectified.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);
+            background=new CameraBackground(boardPixels,SIZE,SIZE);
             char[][] start={"rnbqkbnr".toCharArray(),"pppppppp".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"PPPPPPPP".toCharArray(),"RNBQKBNR".toCharArray()};
             position=new ChessPosition(start,Side.WHITE,"KQkq","-");
         }
+        rectified.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);
+        if(background!=null&&!background.visible(boardPixels,SIZE,SIZE)){covered=true;consensus.accept(null);return null;}
         float[][] screen=classifier.labelCosts(rectified,bounds),canonical=new float[64][];
         if(screen==null){consensus.accept(null);return null;}
         for(int i=0;i<64;i++) {

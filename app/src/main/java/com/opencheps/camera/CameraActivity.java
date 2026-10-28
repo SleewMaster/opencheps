@@ -145,7 +145,7 @@ public class CameraActivity extends AppCompatActivity {
                     boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
                     boolean hold=adviceGuard.failure(SystemClock.uptimeMillis(),!hardLoss,!hardLoss,observation!=null&&observation.pendingChange);
                     suspendAdvice(!hold);
-                    status.setText(hardLoss?"Доска потеряна или сильно смазана. Верни её в рамку; при большом сдвиге выставь углы заново.":"Стабилизирую кадр · для старта нужна начальная расстановка");return;
+                    status.setText(hardLoss?"Доска перекрыта, смазана или потеряна. Покажи её целиком; при большом сдвиге выставь углы заново.":"Стабилизирую кадр · для старта нужна начальная расстановка");return;
                 }
                 adviceGuard.verified(SystemClock.uptimeMillis());
                 String fen=CameraBoard.fen(answer);
