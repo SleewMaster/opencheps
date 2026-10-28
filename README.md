@@ -1,6 +1,6 @@
-# OpenCheps Bot 0.9.0 development
+# OpenCheps Bot 0.9.0
 
-**[Скачать APK 0.8.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.8.0/OpenCheps_Bot_0.8.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.8.0)**
+**[Скачать APK 0.9.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.9.0/OpenCheps_Bot_0.9.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.9.0)**
 
 Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана в начальной расстановке**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
 
@@ -36,4 +36,4 @@ App package: `com.opencheps.bottrainer`. Camera mode does not run concurrently w
 
 ## License
 
-App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.8.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
+App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.9.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
