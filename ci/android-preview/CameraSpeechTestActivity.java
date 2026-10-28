@@ -12,7 +12,8 @@ public class CameraSpeechTestActivity extends Activity {
             if(ready&&!sent){sent=true;
                 String fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
                 String text=new MoveAnnouncement().pending(fen,"e2e4",true);
-                write(speech.speak(text)?"CAMERA_SPEECH_QUEUED":"CAMERA_SPEECH_FAIL enqueue");
+                if(!speech.speak(text)||!speech.stop()||speech.stop()){write("CAMERA_SPEECH_FAIL interruption state");return;}
+                write(speech.speak(text)?"CAMERA_SPEECH_QUEUED":"CAMERA_SPEECH_FAIL enqueue after interruption");
             }else if(!ready&&!message.startsWith("Запускаю"))write("CAMERA_SPEECH_FAIL "+message);
         });speech.start();
     }

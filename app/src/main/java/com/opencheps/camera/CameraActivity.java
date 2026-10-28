@@ -117,7 +117,7 @@ public class CameraActivity extends AppCompatActivity {
             Prefs.get(this).edit().putBoolean("camera_voice",enabled).apply();
             if(speech==null)return;
             if(enabled){if(speech.ready())announce(true);else speech.start();}
-            else speech.stop();
+            else stopSpeech();
             updateRepeat();
         });
         TextView privacy=text("Кадры обрабатываются на телефоне, без сохранения. Настоящие объёмные фигуры пока не поддерживаются.",10,0xff829ab8);privacy.setPadding(0,dp(4),0,dp(4));root.addView(privacy);
@@ -144,13 +144,14 @@ public class CameraActivity extends AppCompatActivity {
         if(apply!=null)apply.setText("Начать");
         if(status!=null)status.setText("Выставь углы на начальной позиции. Снизу должен быть выбранный цвет.");
     }
-    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();if(speech!=null)speech.stop();updateRepeat();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
+    private void stopSpeech(){if(speech!=null&&speech.stop())announcement.reset();}
+    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();stopSpeech();updateRepeat();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
     private void suspendAdvice(boolean hide){
         // Keep the last verified FEN's completed analysis cached, but prevent new engine
         // results from being displayed until the position is visually verified again.
         generation++;verifiedFen="";engine.cancelSearch();updateRepeat();
-        if(hide){if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}
-        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
+        if(hide){stopSpeech();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}
+        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){stopSpeech();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
     }
     private final Runnable tick=new Runnable(){@Override public void run(){
         if(!active||destroyed)return;main.postDelayed(this,220);
@@ -174,7 +175,7 @@ public class CameraActivity extends AppCompatActivity {
                 String fen=CameraBoard.fen(answer);
                 if(!fen.equals(verifiedFen)){
                     generation++;engine.cancelSearch();verifiedFen=fen;
-                    if(!fen.equals(displayFen)){displayFen="";displayComplete=false;displayed=Collections.emptyList();if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Подсказка появится здесь");}
+                    if(!fen.equals(displayFen)){displayFen="";displayComplete=false;displayed=Collections.emptyList();stopSpeech();boardView.clear();moveLabel.setText("Подсказка появится здесь");}
                     updateRepeat();
                 }
                 if(answer.turn!=userSide){status.setText("Жду ход соперника · доска распознана");return;}
