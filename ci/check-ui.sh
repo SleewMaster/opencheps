@@ -179,7 +179,7 @@ assert any(n.get('resource-id','').endswith('/sourceCamera') and n.get('checked'
 assert not any(n.get('text')=='КАМЕРА  /  LIVE' for n in nodes)
 PYUI
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
-for attempt in $(seq 1 120); do
+for attempt in $(seq 1 180); do
  result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
  if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
  if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
@@ -188,8 +188,25 @@ for attempt in $(seq 1 120); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
+
+# Both production arrow views must render a named legal move in either orientation.
+for side in w b; do
+ adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraHintPreviewActivity --es side "$side"
+ sleep 1
+ adb shell uiautomator dump /sdcard/camera-hint.xml
+ adb pull /sdcard/camera-hint.xml "ui-proof/camera-hint-$side.xml"
+ adb exec-out screencap -p > "ui-proof/camera-hint-$side.png"
+done
+python3 - <<'PYHINT'
+import xml.etree.ElementTree as E
+for side,expected in [('w','Пешка  e2 → e4'),('b','Конь  g8 → f6')]:
+ nodes=list(E.parse('ui-proof/camera-hint-'+side+'.xml').iter('node'))
+ assert any(n.get('text')==expected for n in nodes),expected
+ assert any(n.get('content-desc')==expected for n in nodes),'mini board missing '+expected
+print('CAMERA_HINT_OK figure, source, destination, camera arrow and stable board in both orientations')
+PYHINT
 
 # Denied permission must leave a usable camera screen and a working exit.
 adb shell pm revoke com.opencheps.bottrainer android.permission.CAMERA

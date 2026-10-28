@@ -4,6 +4,10 @@ import org.junit.Test;import static org.junit.Assert.*;
 
 public class MoveAnnouncementTest {
     private static final String START="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    @Test public void visiblePawnLabel(){assertEquals("Пешка  e2 → e4",MoveAnnouncement.label(START,"e2e4"));}
+    @Test public void visibleKnightLabel(){assertEquals("Конь  g1 → f3",MoveAnnouncement.label(START,"g1f3"));}
+    @Test public void visibleIllegalMoveRejected(){assertNull(MoveAnnouncement.label(START,"e2e5"));}
+    @Test public void visiblePromotionLabel(){assertEquals("Пешка  a7 → a8 = N",MoveAnnouncement.label("4k3/P7/8/8/8/8/8/4K3 w - - 0 1","a7a8n"));}
     @Test public void saysPawnAndCoordinates(){assertEquals("Пешка с е два на е четыре.",MoveAnnouncement.describe(START,"e2e4"));}
     @Test public void saysKnight(){assertEquals("Конь с джи один на эф три.",MoveAnnouncement.describe(START,"g1f3"));}
     @Test public void rejectsIllegalAndMalformedMoves(){for(String move:new String[]{"e2e5","e7e5","e2e2","(none)","0000","e2e4q","i2e4"})assertNull(MoveAnnouncement.describe(START,move));}

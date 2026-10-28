@@ -1,4 +1,4 @@
-# OpenCheps Bot 0.8.0
+# OpenCheps Bot 0.9.0 development
 
 **[Скачать APK 0.8.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.8.0/OpenCheps_Bot_0.8.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.8.0)**
 
@@ -12,7 +12,9 @@ Grant display-over-apps and full-screen capture permissions, show a flat 2D ches
 
 ## Camera
 
-Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, in the initial position. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the board fully visible; tap the image to focus after calibration. **Углы заново** resets calibration for a new board or moved phone.
+Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, in the initial position. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the board fully visible; tap the image to focus after calibration. **Углы заново** lets you reframe the same game; return to the main screen to learn a different board.
+
+The initial frame is snapped to the complete 8×8 checker grid before learning pieces. If the rough frame fails, the whole preview is searched. Extra monitor margins are excluded. «Углы заново» now re-applies geometry without discarding the trained pieces or current game. The phone shows a stable miniature board, a wide arrow, source/destination highlights and a named move such as «Конь g1 → f3». Diagnostic messages distinguish missing grid, blur, wrong bottom colour and unrecognised pieces.
 
 The selected quadrilateral is rectified to a 640 × 640 board before template recognition. Legal positions, including two missed plies, are considered; two clear matching observations are required to accept a position. Uncertain frames hide advice. Hints are projected back into the camera preview using the same four corners. Preview sampling excludes the app's own drawn hints.
 
@@ -22,7 +24,7 @@ Camera hand-shake stabilization registers grid intersections against a fixed ref
 
 Camera stops when the activity leaves the foreground. Returning clears old hints; changing size/orientation or recreating the activity requires calibration again. No frames are saved or uploaded. There is no microphone or network permission.
 
-Physical 3D chess pieces, arbitrary mid-game calibration, large camera movement, glare, occlusion and all board themes are **not supported or guaranteed**. Camera compatibility is tested with Android's virtual camera and synthetic perspective images; a physical-device field test is still needed.
+Physical 3D chess pieces, arbitrary mid-game calibration, glare, occlusion and all board themes are **not supported or guaranteed**. Camera compatibility is tested with Android's virtual camera and synthetic perspective images; a physical-device field test is still needed.
 
 ## Engine and build
 

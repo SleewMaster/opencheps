@@ -53,7 +53,7 @@ public final class CameraBoardView extends View {
         if(valid&&projection.setPolyToPoly(new float[]{0,0,640,0,640,640,0,640},0,corners,0,4)){
             c.save();c.concat(projection);c.clipRect(0,0,640,640);
             if(editing){paint.setColor(0x88b9f66e);paint.setStrokeWidth(1);for(int i=1;i<8;i++){c.drawLine(i*80,0,i*80,640,paint);c.drawLine(0,i*80,640,i*80,paint);}}
-            else for(int i=moves.size()-1;i>=0;i--)drawMove(c,moves.get(i).uci,i);
+            else for(int i=moves.size()-1;i>=0;i--)CameraMoveArrow.draw(c,paint,moves.get(i).uci,perspective,i);
             c.restore();
         }
         if(editing){
@@ -64,21 +64,5 @@ public final class CameraBoardView extends View {
                 paint.setStyle(Paint.Style.FILL);paint.setTextSize(14*density);paint.setTextAlign(Paint.Align.CENTER);c.drawText(""+(i+1),corners[i*2],corners[i*2+1]+5*density,paint);
             }
         }
-    }
-    private void drawMove(Canvas c,String move,int index){
-        if(!com.opencheps.engine.UciInfo.isMove(move))return;
-        int ff=move.charAt(0)-'a',fr='8'-move.charAt(1),tf=move.charAt(2)-'a',tr='8'-move.charAt(3);
-        if(perspective==Side.BLACK){ff=7-ff;fr=7-fr;tf=7-tf;tr=7-tr;}
-        float sx=(ff+.5f)*80,sy=(fr+.5f)*80,ex=(tf+.5f)*80,ey=(tr+.5f)*80;
-        float dx=ex-sx,dy=ey-sy,len=(float)Math.hypot(dx,dy);if(len<1)return;
-        float ux=dx/len,uy=dy/len,px=-uy,py=ux;
-        int color=new int[]{0xffb9f66e,0xff67d7ff,0xffffc566}[Math.min(index,2)];
-        paint.setStyle(Paint.Style.STROKE);paint.setColor(color);paint.setStrokeWidth(index==0?3.5f:2);
-        c.drawRoundRect(ex-34,ey-34,ex+34,ey+34,10,10,paint);
-        float half=index==0?4:2.5f,neckX=ex-ux*25,neckY=ey-uy*25;
-        Path path=new Path();path.moveTo(sx+ux*12+px*half,sy+uy*12+py*half);path.lineTo(neckX+px*half,neckY+py*half);path.lineTo(neckX+px*15,neckY+py*15);path.lineTo(ex,ey);path.lineTo(neckX-px*15,neckY-py*15);path.lineTo(neckX-px*half,neckY-py*half);path.lineTo(sx+ux*12-px*half,sy+uy*12-py*half);path.close();
-        paint.setColor(0xff101925);paint.setStrokeWidth(5);c.drawPath(path,paint);paint.setStyle(Paint.Style.FILL);paint.setColor(color);c.drawPath(path,paint);
-        paint.setColor(0xff101925);c.drawCircle(sx,sy,11,paint);paint.setColor(color);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(3);c.drawCircle(sx,sy,11,paint);
-        if(index==0){paint.setStyle(Paint.Style.FILL);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(15);paint.setTypeface(Typeface.DEFAULT_BOLD);float bx=ex-ux*26,by=ey-uy*26;paint.setColor(0xff101925);c.drawRoundRect(bx-17,by-10,bx+17,by+10,4,4,paint);paint.setColor(color);c.drawText(move.substring(2).toUpperCase(Locale.ROOT),bx,by+5,paint);}
     }
 }

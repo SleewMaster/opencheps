@@ -8,7 +8,7 @@ public class CameraVisionTestActivity extends Activity {
     private static final String[] START={"rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"};
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
-        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
+        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
     private int check(){int passed=0;
@@ -65,6 +65,25 @@ public class CameraVisionTestActivity extends Activity {
             CameraBoard.FrameResult recovered=session.readFrame(clear,anchor);if(recovered.position==null)recovered=session.readFrame(clear,anchor);
             if(recovered.position==null||!java.util.Arrays.deepEquals(recovered.position.board,e5))throw new AssertionError("did not recover after hand");
             raw.recycle();clear.recycle();covered.recycle();
+        }return passed;
+    }
+    private int checkCoarse(){int passed=0;
+        for(int theme=0;theme<THEMES.length;theme++)for(boolean flipped:new boolean[]{false,true}){
+            float[] actual={120,80,660,140,700,720,60,760},rough={80,60,675,135,720,810,10,805};
+            char[][] start=new char[8][];for(int r=0;r<8;r++)start[r]=START[r].toCharArray();
+            char[][] e4=ChessPosition.copy(start);e4[6][4]='.';e4[4][4]='P';char[][] e5=ChessPosition.copy(e4);e5[1][4]='.';e5[3][4]='p';
+            CameraBoard session=new CameraBoard(flipped?Side.BLACK:Side.WHITE);
+            for(char[][] position:new char[][][]{start,e4,e5}){
+                Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(position):position,THEMES[theme]),shot=photograph(raw,actual,true);
+                CameraBoard.FrameResult result=session.readFrame(shot,rough);result=session.readFrame(shot,rough);
+                if(result.position==null||!java.util.Arrays.deepEquals(result.position.board,position)){save(shot,"camera-photo.png");throw new AssertionError("coarse calibration theme="+theme+" flipped="+flipped+" reason="+result.problem);}
+                passed++;raw.recycle();shot.recycle();
+            }
+            // Geometry can be re-applied after moves without learning a fake initial position.
+            session.requestReframe();Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(e5):e5,THEMES[theme]),shot=photograph(raw,actual,true);
+            CameraBoard.FrameResult result=session.readFrame(shot,rough);result=session.readFrame(shot,rough);
+            if(result.position==null||!java.util.Arrays.deepEquals(result.position.board,e5))throw new AssertionError("reframe lost current game theme="+theme+" reason="+result.problem);
+            raw.recycle();shot.recycle();
         }return passed;
     }
     private float[] shaken(float[] corners,int step){

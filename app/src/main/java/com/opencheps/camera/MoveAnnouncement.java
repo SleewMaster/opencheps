@@ -11,6 +11,14 @@ public final class MoveAnnouncement {
     }
     public void accepted(String fen){spokenFen=fen;}
     public void reset(){spokenFen="";}
+    public static String label(String fen,String uci){
+        if(describe(fen,uci)==null)return null;
+        ChessPosition p=parse(fen);char type=Character.toLowerCase(p.board['8'-uci.charAt(1)][uci.charAt(0)-'a']);
+        String name=type=='p'?"Пешка":type=='n'?"Конь":type=='b'?"Слон":type=='r'?"Ладья":type=='q'?"Ферзь":"Король";
+        String result=name+"  "+uci.substring(0,2)+" → "+uci.substring(2,4);
+        if(uci.length()==5)result+=" = "+Character.toUpperCase(uci.charAt(4));
+        return result;
+    }
 
     public static String describe(String fen,String uci){
         if(fen==null||uci==null||!uci.matches("[a-h][1-8][a-h][1-8][qrbn]?"))return null;
