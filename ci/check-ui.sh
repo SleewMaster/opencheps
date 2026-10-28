@@ -113,6 +113,20 @@ done
 echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
 
+# Exercise actual production TTS binding/selection/utterance, using the CI-only engine.
+adb shell settings put secure tts_default_synth com.opencheps.touchprobe
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraSpeechTestActivity
+for attempt in $(seq 1 20); do
+ result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-speech-result.txt 2>/dev/null || true)
+ spoken=$(adb shell run-as com.opencheps.touchprobe cat files/spoken.txt 2>/dev/null || true)
+ if [[ "$result" == CAMERA_SPEECH_FAIL* ]]; then adb logcat -d -s TextToSpeech:I; echo "$result"; exit 1; fi
+ if [[ "$result" == CAMERA_SPEECH_QUEUED && "$spoken" == 'Пешка с е два на е четыре.' ]]; then break; fi
+ sleep 1
+done
+[[ "$result" == CAMERA_SPEECH_QUEUED && "$spoken" == 'Пешка с е два на е четыре.' ]] || { echo "Speech missing: $result / $spoken"; exit 1; }
+adb shell input keyevent KEYCODE_BACK
+echo 'CAMERA_SPEECH_OK Android TTS binding, offline Russian voice, actual utterance'
+
 # Camera mode launches from the actual source selector with no projection consent.
 adb shell am start -W -f 0x14000000 -n com.opencheps.bottrainer/com.opencheps.ui.MainActivity
 adb shell input swipe 360 350 360 1100 300
@@ -141,6 +155,8 @@ import xml.etree.ElementTree as E,re,subprocess
 nodes=list(E.parse('ui-proof/camera.xml').iter('node'))
 assert any('КАМЕРА  /  LIVE'==n.get('text') for n in nodes)
 assert not any('media_projection' in n.get('resource-id','') for n in nodes)
+assert any(n.get('text')=='Озвучивать ход' and n.get('checked')=='true' for n in nodes),'voice toggle missing'
+assert any(n.get('text')=='Повторить' and n.get('enabled')=='false' for n in nodes),'unverified move must not be repeatable'
 def click(label):
  b=next(n for n in nodes if n.get('text')==label);x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 click('Начать')

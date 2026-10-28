@@ -30,6 +30,11 @@ public class CameraActivity extends AppCompatActivity {
     private CameraBoardView boardView;
     private TextView status,moveLabel;
     private Button apply,pause,orientation;
+    private CheckBox voiceToggle;
+    private Button repeat;
+    private CameraSpeech speech;
+    private final MoveAnnouncement announcement=new MoveAnnouncement();
+    private boolean displayComplete;
     private ProcessCameraProvider provider;
     private Camera camera;
     private CameraBoard board;
@@ -49,6 +54,13 @@ public class CameraActivity extends AppCompatActivity {
         super.onCreate(saved);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         ScreenCaptureService.stopSession(this);userSide="b".equals(Prefs.userSide(this))?Side.BLACK:Side.WHITE;
         buildUi();
+        speech=new CameraSpeech(this,(ready,message)->{
+            if(destroyed)return;
+            voiceToggle.setText(ready?"Озвучивать ход":"Голос: "+message);
+            updateRepeat();
+            if(ready)announce(false);
+        });
+        if(voiceToggle.isChecked())speech.start();
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)openCamera();
         else permission.launch(Manifest.permission.CAMERA);
         analysis.execute(()->{
@@ -98,6 +110,16 @@ public class CameraActivity extends AppCompatActivity {
         pause=button("Пауза");buttons.addView(pause,new LinearLayout.LayoutParams(0,dp(52),1));pause.setOnClickListener(v->{
             paused=!paused;invalidateAdvice();pause.setText(paused?"Продолжить":"Пауза");status.setText(paused?"Пауза · камера открыта":"Продолжаю распознавание");
         });
+        LinearLayout audio=new LinearLayout(this);audio.setGravity(Gravity.CENTER_VERTICAL);root.addView(audio,new LinearLayout.LayoutParams(-1,dp(48)));
+        voiceToggle=new CheckBox(this);voiceToggle.setText("Озвучивать ход");voiceToggle.setTextSize(12);voiceToggle.setTextColor(0xffb9f66e);voiceToggle.setChecked(Prefs.get(this).getBoolean("camera_voice",true));audio.addView(voiceToggle,new LinearLayout.LayoutParams(0,-1,1));
+        repeat=button("Повторить");repeat.setEnabled(false);audio.addView(repeat,new LinearLayout.LayoutParams(dp(100),-1));repeat.setOnClickListener(v->announce(true));
+        voiceToggle.setOnCheckedChangeListener((v,enabled)->{
+            Prefs.get(this).edit().putBoolean("camera_voice",enabled).apply();
+            if(speech==null)return;
+            if(enabled){if(speech.ready())announce(true);else speech.start();}
+            else speech.stop();
+            updateRepeat();
+        });
         TextView privacy=text("Кадры обрабатываются на телефоне, без сохранения. Настоящие объёмные фигуры пока не поддерживаются.",10,0xff829ab8);privacy.setPadding(0,dp(4),0,dp(4));root.addView(privacy);
     }
     private void openCamera(){
@@ -117,17 +139,18 @@ public class CameraActivity extends AppCompatActivity {
     }
     private void reset(boolean editing){
         invalidateAdvice();board=null;paused=false;if(pause!=null)pause.setText("Пауза");
+        announcement.reset();
         if(boardView!=null)boardView.setEditing(editing);
         if(apply!=null)apply.setText("Начать");
         if(status!=null)status.setText("Выставь углы на начальной позиции. Снизу должен быть выбранный цвет.");
     }
-    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
+    private void invalidateAdvice(){generation++;verifiedFen="";displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();if(speech!=null)speech.stop();updateRepeat();if(boardView!=null)boardView.clear();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
     private void suspendAdvice(boolean hide){
         // Keep the last verified FEN's completed analysis cached, but prevent new engine
         // results from being displayed until the position is visually verified again.
-        generation++;verifiedFen="";engine.cancelSearch();
-        if(hide){boardView.clear();moveLabel.setText("Стабилизирую изображение…");}
-        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){boardView.clear();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
+        generation++;verifiedFen="";engine.cancelSearch();updateRepeat();
+        if(hide){if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}
+        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
     }
     private final Runnable tick=new Runnable(){@Override public void run(){
         if(!active||destroyed)return;main.postDelayed(this,220);
@@ -151,10 +174,16 @@ public class CameraActivity extends AppCompatActivity {
                 String fen=CameraBoard.fen(answer);
                 if(!fen.equals(verifiedFen)){
                     generation++;engine.cancelSearch();verifiedFen=fen;
-                    if(!fen.equals(displayFen)){displayFen="";displayed=Collections.emptyList();boardView.clear();moveLabel.setText("Подсказка появится здесь");}
+                    if(!fen.equals(displayFen)){displayFen="";displayComplete=false;displayed=Collections.emptyList();if(speech!=null)speech.stop();boardView.clear();moveLabel.setText("Подсказка появится здесь");}
+                    updateRepeat();
                 }
                 if(answer.turn!=userSide){status.setText("Жду ход соперника · доска распознана");return;}
-                if(fen.equals(displayFen)&&!displayed.isEmpty()){boardView.setMoves(displayed,perspective);return;}
+                if(fen.equals(displayFen)&&!displayed.isEmpty()){
+                    boardView.setMoves(displayed,perspective);showMove(displayed.get(0),displayComplete);updateRepeat();
+                    if(displayComplete){announce(false);return;}
+                    // A dropped camera frame may have cancelled an unfinished search.
+                    // Reuse its arrow while finishing analysis; do not mistake a partial PV for a completed result.
+                }
                 if(!engineReady){status.setText(engineFailed?"Stockfish недоступен — открой режим заново":"Запускаю Stockfish…");return;}
                 if(!analysisBusy)analyze(fen);
             });
@@ -171,13 +200,24 @@ public class CameraActivity extends AppCompatActivity {
     }
     private void render(List<StockfishEngine.Pv> moves,String fen,int token,boolean complete){
         if(!active||destroyed||paused||token!=generation||!fen.equals(verifiedFen)||moves.isEmpty())return;
-        displayed=new ArrayList<>(moves);displayFen=fen;boardView.setMoves(moves,perspective);
-        StockfishEngine.Pv best=moves.get(0);String uci=best.uci;
+        displayed=new ArrayList<>(moves);displayFen=fen;displayComplete=complete;boardView.setMoves(moves,perspective);
+        showMove(moves.get(0),complete);updateRepeat();if(complete)announce(false);
+    }
+    private void showMove(StockfishEngine.Pv best,boolean complete){
+        String uci=best.uci;
         String score=best.mate?"мат "+Math.abs(100000-Math.abs(best.cp)):String.format(Locale.forLanguageTag("ru"),"%+.2f",best.cp/100f);
         moveLabel.setText(uci.substring(0,2)+" → "+uci.substring(2)+"   "+score);
         status.setText((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные"));
     }
+    private boolean canAnnounce(){return active&&!destroyed&&!paused&&speech!=null&&speech.ready()&&voiceToggle.isChecked()&&displayComplete&&!displayed.isEmpty()&&!verifiedFen.isEmpty()&&verifiedFen.equals(displayFen);}
+    private void updateRepeat(){if(repeat!=null)repeat.setEnabled(canAnnounce());}
+    private void announce(boolean requested){
+        if(!canAnnounce())return;
+        String uci=displayed.get(0).uci;
+        String message=requested?MoveAnnouncement.describe(verifiedFen,uci):announcement.pending(verifiedFen,uci,displayComplete);
+        if(message!=null&&speech.speak(message))announcement.accepted(verifiedFen);
+    }
     @Override protected void onResume(){super.onResume();active=true;main.removeCallbacks(tick);main.post(tick);}
     @Override protected void onPause(){active=false;main.removeCallbacks(tick);invalidateAdvice();super.onPause();}
-    @Override protected void onDestroy(){destroyed=true;active=false;main.removeCallbacksAndMessages(null);engine.cancelSearch();vision.shutdown();analysis.execute(engine::stop);analysis.shutdown();if(provider!=null)provider.unbindAll();super.onDestroy();}
+    @Override protected void onDestroy(){destroyed=true;active=false;main.removeCallbacksAndMessages(null);if(speech!=null)speech.close();engine.cancelSearch();vision.shutdown();analysis.execute(engine::stop);analysis.shutdown();if(provider!=null)provider.unbindAll();super.onDestroy();}
 }
