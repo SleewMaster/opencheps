@@ -113,6 +113,20 @@ done
 echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
 
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
+for attempt in $(seq 1 180); do
+ result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
+ if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
+ if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
+  for file in camera-calibration.png camera-failed.png camera-photo.png; do adb exec-out run-as com.opencheps.bottrainer cat files/"$file" > ui-proof/"$file" || true; done
+  adb logcat -d -s CameraVisionTest:E; echo "$result"; exit 1
+ fi
+ sleep 1
+done
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+echo "$result"
+
+
 # Joining a game must not require the initial diagram. Exercise both review orientations.
 for side in w b; do
  adb shell run-as com.opencheps.bottrainer rm -f files/screen-join-result.txt files/screen-join-ui-result.txt
@@ -140,12 +154,16 @@ for attempt in range(7):
  button=next((n for n in nodes if n.get('text')=='Подтвердить позицию'),None)
  if button is not None:
   x1,y1,x2,y2=map(int,re.findall(r'\d+',button.attrib['bounds']))
-  if y2>y1:
+  if y2-y1>=40 and y2<1210:
    subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True);break
  subprocess.run(['adb','shell','input','swipe','360','1080','360','450','300'],check=True)
 else: raise AssertionError('review confirm unreachable')
 PYJOIN
- result=$(adb shell run-as com.opencheps.bottrainer cat files/screen-join-ui-result.txt 2>/dev/null || true)
+ for attempt in $(seq 1 20); do
+  result=$(adb shell run-as com.opencheps.bottrainer cat files/screen-join-ui-result.txt 2>/dev/null || true)
+  if [[ "$result" == SCREEN_JOIN_UI_OK* ]]; then break; fi
+  sleep 0.25
+ done
  [[ "$result" == SCREEN_JOIN_UI_OK* ]] || { echo "Review not applied: $result"; exit 1; }
  echo "$result"
 done
@@ -217,19 +235,6 @@ nodes=list(E.parse('ui-proof/camera-closed.xml').iter('node'))
 assert any(n.get('resource-id','').endswith('/sourceCamera') and n.get('checked')=='true' for n in nodes),'camera did not return to saved source choice'
 assert not any(n.get('text')=='КАМЕРА  /  LIVE' for n in nodes)
 PYUI
-adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
-for attempt in $(seq 1 180); do
- result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
- if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
- if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
-  for file in camera-calibration.png camera-failed.png camera-photo.png; do adb exec-out run-as com.opencheps.bottrainer cat files/"$file" > ui-proof/"$file" || true; done
-  adb logcat -d -s CameraVisionTest:E; echo "$result"; exit 1
- fi
- sleep 1
-done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
-echo "$result"
-
 # Both production arrow views must render a named legal move in either orientation.
 for side in w b; do
  adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraHintPreviewActivity --es side "$side"
