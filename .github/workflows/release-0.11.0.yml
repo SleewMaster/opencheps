@@ -1,0 +1,62 @@
+name: Publish OpenCheps Bot 0.11.0
+on:
+  push:
+    branches: [release-v0.11.0]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-opencheps-v0.11.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the successful tested source build
+        run: |
+          set -euo pipefail
+          gh api repos/$GH_REPO/actions/runs/40933437282 --jq '.status + " " + .conclusion + " " + .head_sha' > /tmp/opencheps-tested-run
+          test "$(cat /tmp/opencheps-tested-run)" = 'completed success e289efafc2ee1d772b3e92b3c2ba1cbc5d3615f0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: opencheps-arm64-v8a-debug
+          run-id: 40933437282
+          github-token: ${{ github.token }}
+          path: release-assets
+      - name: Prepare the exact tested APK and licenses
+        run: |
+          set -euo pipefail
+          mv release-assets/app-arm64-v8a-debug.apk release-assets/OpenCheps_Bot_0.11.0.apk
+          cd release-assets
+          echo 'd680b2e6e32cc66722cee70f46d61f23d5e24daa2db1e9dd4082c1046f2bb7f3  OpenCheps_Bot_0.11.0.apk' > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          zip -q OpenCheps_Bot_0.11.0.zip OpenCheps_Bot_0.11.0.apk
+          sha256sum OpenCheps_Bot_0.11.0.zip >> SHA256SUMS.txt
+          cp ../LICENSE OpenCheps_LICENSE.txt
+          cp ../licenses/Stockfish-Copying.txt Stockfish_COPYING.txt
+          cp ../release/v0.11.0/THIRD_PARTY_NOTICES.txt .
+      - name: Publish experimental release with all assets attached
+        run: |
+          set -euo pipefail
+          if gh release view v0.11.0 --json isDraft --jq '.isDraft' > /tmp/opencheps-existing-draft 2>/dev/null; then
+            test "$(cat /tmp/opencheps-existing-draft)" = 'true'
+            test "$(gh api repos/$GH_REPO/git/ref/tags/v0.11.0 --jq '.object.sha')" = 'e289efafc2ee1d772b3e92b3c2ba1cbc5d3615f0'
+          else
+            gh release create v0.11.0 --target e289efafc2ee1d772b3e92b3c2ba1cbc5d3615f0 --title 'OpenCheps Bot 0.11.0 — камера с текущей позиции и история ходов' --notes-file release/v0.11.0/notes.md --draft --prerelease
+          fi
+          gh release upload v0.11.0 release-assets/* --clobber
+          gh release edit v0.11.0 --draft=false --prerelease
+          gh release view v0.11.0 --json url,isDraft,isPrerelease,assets
+      - name: Verify unauthenticated public APK download
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-delay 3 --retry-all-errors -o /tmp/OpenCheps_Bot_0.11.0.apk https://github.com/SleewMaster/opencheps/releases/download/v0.11.0/OpenCheps_Bot_0.11.0.apk
+          cd /tmp
+          echo 'd680b2e6e32cc66722cee70f46d61f23d5e24daa2db1e9dd4082c1046f2bb7f3  OpenCheps_Bot_0.11.0.apk' | sha256sum -c -
