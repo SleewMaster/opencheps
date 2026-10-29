@@ -10,9 +10,9 @@
 
 ---
 
-# OpenCheps Bot 0.9.0
+# OpenCheps Bot 0.10.0
 
-**[Скачать APK 0.9.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.9.0/OpenCheps_Bot_0.9.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.9.0)**
+**[Скачать APK 0.10.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.10.0/OpenCheps_Bot_0.10.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.10.0)**
 
 Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана в начальной расстановке**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
 
@@ -20,7 +20,7 @@ Android chess analysis with Stockfish 18. Choose **Screen** or **Camera** on the
 
 ## Screen
 
-Grant display-over-apps and full-screen capture permissions, show a flat 2D chess board in its starting position, and wait for calibration. Use **▣ ДОСКА** to select a board manually. The panel X, app Stop and notification Stop end the entire session. Android-protected windows cannot be captured by this mode.
+Grant display-over-apps and full-screen capture permissions and show a flat 2D chess board. Starting positions calibrate automatically. To join a game already in progress, review the detected diagram and explicitly select the side to move. Use **ПОЗИЦИЯ** to correct pieces, orientation and history fields, or import a complete FEN. Built-in recognition covers standard Neo pieces; other styles may need corrections or one-time initial-position theme learning. Use **▣ ДОСКА** to select a board manually. The panel X, app Stop and notification Stop end the entire session. Android-protected windows cannot be captured by this mode.
 
 ## Camera
 
@@ -48,4 +48,4 @@ App package: `com.opencheps.bottrainer`. Camera mode does not run concurrently w
 
 ## License
 
-App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.9.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
+App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.10.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
