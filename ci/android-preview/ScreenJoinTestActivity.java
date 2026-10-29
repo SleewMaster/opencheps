@@ -14,6 +14,11 @@ public class ScreenJoinTestActivity extends Activity {
         int[][] themes={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3}};
         Bitmap start=NativeVisionCheck.render(640,640,0,initial.position.board,themes[0]);PieceClassifier training=new PieceClassifier();
         if(!training.tryBootstrap(start,new BoardDetector.Board(0,0,640,1)))throw new AssertionError("theme training");
+        for(String sparse:new String[]{"8/8/8/8/8/8/8/8", "6k1/7r/8/8/8/8/R7/6K1"}){
+            char[][] diagram=new char[8][8];String[] rows=sparse.split("/");for(int r=0;r<8;r++){int f=0;for(char c:rows[r].toCharArray())if(c>='1'&&c<='8')for(int end=f+c-'0';f<end;f++)diagram[r][f]='.';else diagram[r][f++]=c;}
+            Bitmap sparseImage=NativeVisionCheck.render(640,640,0,diagram,themes[0]);
+            if(new PieceClassifier().tryBootstrap(sparseImage,new BoardDetector.Board(0,0,640,1)))throw new AssertionError("sparse diagram accepted as initial position");sparseImage.recycle();
+        }
         ByteArrayOutputStream serialized=new ByteArrayOutputStream();training.exportTemplates().write(serialized);start.recycle();
         PieceTemplates bank=PieceTemplates.read(new ByteArrayInputStream(serialized.toByteArray()));int count=0;
         for(String fen:new String[]{LATE,"4k3/pp3ppp/2n1b3/3pP3/8/2N2N2/PP3PPP/4K2R w - - 0 20","4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 20"})for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int[] theme:themes){

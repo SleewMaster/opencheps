@@ -64,7 +64,7 @@ public class PieceClassifier {
             }
         }
 
-        if (minOccupiedEdge < maxEmptyEdge * 1.5f) {
+        if (minOccupiedEdge < .005f || minOccupiedEdge < maxEmptyEdge * 1.5f) {
             Log.i(TAG, "bootstrap reject: minOccupied=" + minOccupiedEdge
                     + " maxEmpty=" + maxEmptyEdge);
             return false;
