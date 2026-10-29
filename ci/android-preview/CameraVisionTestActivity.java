@@ -8,7 +8,11 @@ public class CameraVisionTestActivity extends Activity {
     private static final String[] START={"rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"};
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
-        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse()+" RECOVERY_OK "+checkRecovery()+" JOIN_OK "+checkJoin();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
+        new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin};
+            for(int i=0;i<checks.length;i++)try{if(success.length()>0)success.append(' ');success.append(names[i]).append(' ').append(checks[i].getAsInt());}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");}
+            String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
     private int check(){int passed=0;
@@ -111,7 +115,7 @@ public class CameraVisionTestActivity extends Activity {
                 CameraBoard.FrameResult result=null;
                 for(int i=0;i<10;i++){result=session.readFrame(shot,anchor);if(result.position!=null)break;}
                 if(result.position==null||!java.util.Arrays.deepEquals(result.position.board,expected)){save(shot,"camera-photo.png");throw new AssertionError("automatic recovery theme="+theme+" flipped="+flipped+" reason="+result.problem);}
-                for(int i=0;i<4;i++)if(Math.hypot(result.corners[2*i]-shifted[2*i],result.corners[2*i+1]-shifted[2*i+1])>4)throw new AssertionError("recovered grid misaligned");
+                for(int i=0;i<4;i++)if(Math.hypot(result.corners[2*i]-shifted[2*i],result.corners[2*i+1]-shifted[2*i+1])>4){save(shot,"camera-photo.png");throw new AssertionError("recovered grid misaligned theme="+theme+" flipped="+flipped+" actual="+java.util.Arrays.toString(result.corners)+" expected="+java.util.Arrays.toString(shifted));}
                 if(expected==e5&&!saved.equals(result.history.command))throw new AssertionError("recovery erased game history");
                 if(expected==nf3&&(result.history.plies!=3||result.history.halfmove!=1||!result.history.command.endsWith(" moves e2e4 e7e5 g1f3")))throw new AssertionError("post-recovery move missing");
                 raw.recycle();shot.recycle();

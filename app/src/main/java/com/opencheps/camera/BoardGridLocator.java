@@ -39,7 +39,24 @@ public final class BoardGridLocator {
             double[] p=map(projection,q[i*2]/S,q[i*2+1]/S);output[i*2]=(float)p[0];output[i*2+1]=(float)p[1];
             if(!Double.isFinite(p[0])||!Double.isFinite(p[1])||p[0]<0||p[1]<0||p[0]>=frame.width||p[1]>=frame.height)return null;
         }
-        return output;
+        // Refine in original frame coordinates with a narrower edge probe. The coarse
+        // rectified search can otherwise stop on a several-pixel-wide score plateau.
+        double precise=score(frame,output,.012/8);
+        for(double step:new double[]{1,.5,.2})for(int round=0;round<6;round++){
+            boolean changed=false;
+            for(int coordinate=0;coordinate<8;coordinate++){
+                float old=output[coordinate],chosen=old;double local=precise;
+                for(int direction:new int[]{-1,1}){
+                    output[coordinate]=(float)(old+direction*step);
+                    int limit=(coordinate&1)==0?frame.width:frame.height;
+                    if(output[coordinate]<1||output[coordinate]>=limit-1)continue;
+                    double value=score(frame,output,.012/8);
+                    if(value>local+.0001){local=value;chosen=output[coordinate];}
+                }
+                output[coordinate]=chosen;if(chosen!=old){precise=local;changed=true;}
+            }if(!changed)break;
+        }
+        return checkerMatches(frame,output)>=61?output:null;
     }
     /** Search beyond the previous crop after a translation, retaining its perspective. */
     public static float[] locateExpanded(BoardMotionTracker.Frame frame,float[] previous){
@@ -81,11 +98,12 @@ public final class BoardGridLocator {
             if(!close)peaks.add(candidate);if(peaks.size()==12)break;
         }return peaks;
     }
-    private static double score(BoardMotionTracker.Frame image,float[] q){
+    private static double score(BoardMotionTracker.Frame image,float[] q){return score(image,q,.035/8);}
+    private static double score(BoardMotionTracker.Frame image,float[] q,double delta){
         double[] h=homography(q);if(h==null)return -100;
         double total=0;int count=0;
         for(int edge=1;edge<8;edge++)for(int square=0;square<8;square++)for(double offset:new double[]{.13,.87}){
-            double v=(square+offset)/8.,u=edge/8.,delta=.035/8;
+            double v=(square+offset)/8.,u=edge/8.;
             double[] a=map(h,u-delta,v),b=map(h,u+delta,v),c=map(h,v,u-delta),d=map(h,v,u+delta);
             double sign=((edge+square)&1)==0?1:-1;
             total+=clamp(sign*(image.at(b[0],b[1])-image.at(a[0],a[1])));

@@ -114,7 +114,7 @@ echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
 
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
-for attempt in $(seq 1 180); do
+for attempt in $(seq 1 240); do
  result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
  if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
  if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
