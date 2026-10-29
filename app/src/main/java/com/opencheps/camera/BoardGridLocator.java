@@ -63,11 +63,13 @@ public final class BoardGridLocator {
         if(previous==null||previous.length!=8)return null;
         float cx=0,cy=0;for(int i=0;i<4;i++){cx+=previous[2*i]/4;cy+=previous[2*i+1]/4;}
         float[] expanded=new float[8];
+        for(float factor:new float[]{1.18f,1.32f}){
         for(int i=0;i<4;i++){
-            expanded[2*i]=Math.max(1,Math.min(frame.width-2,cx+(previous[2*i]-cx)*1.32f));
-            expanded[2*i+1]=Math.max(1,Math.min(frame.height-2,cy+(previous[2*i+1]-cy)*1.32f));
+            expanded[2*i]=Math.max(1,Math.min(frame.width-2,cx+(previous[2*i]-cx)*factor));
+            expanded[2*i+1]=Math.max(1,Math.min(frame.height-2,cy+(previous[2*i+1]-cy)*factor));
         }
-        return locate(frame,expanded);
+        float[] fitted=locate(frame,expanded);if(fitted!=null)return fitted;
+        }return null;
     }
     private static java.util.List<double[]> axis(BoardMotionTracker.Frame image,boolean vertical){
         double[] response=new double[S];

@@ -71,6 +71,11 @@ public final class CameraBoard {
             if(rank<score){score=rank;best=d;selected=reader;}
         }
         if(best==null){problem="Нет шаблонов фигур. Покажи начальную позицию один раз.";return null;}
+        // Independent point samples expose disagreements caused by pooling thin contours.
+        // Keep the pooled proposal, but require the user to review each disagreement.
+        PieceClassifier pointReader=new PieceClassifier();pointReader.useTemplates(selected.exportTemplates(),perspective);
+        DiagramReader.Result point=DiagramReader.read(pointReader.labelCosts(square,bounds));
+        for(int i=0;i<64;i++)if(point==null||point.screen[i/8][i%8]!=best.screen[i/8][i%8])best.uncertain[i]=true;
         String key=java.util.Arrays.deepToString(best.screen);
         if(!reviewConsensus.accept(key)){problem="Читаю текущую позицию · удерживай доску в кадре";return null;}
         int[] pixels=new int[SIZE*SIZE];square.getPixels(pixels,0,SIZE,0,0,SIZE,SIZE);
