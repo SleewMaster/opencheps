@@ -22,7 +22,7 @@ public class ScreenJoinTestActivity extends Activity {
             Bitmap image=NativeVisionCheck.render(640,640,0,screen,theme);BoardDetector.Board bounds=new BoardDetector.Board(0,0,640,1);
             PieceClassifier reader=new PieceClassifier();reader.useTemplates(bank,side);
             DiagramReader.Result result=DiagramReader.read(reader.labelCosts(image,bounds));
-            if(result==null||!Arrays.deepEquals(result.screen,screen))throw new AssertionError("late diagram side="+side+" fen="+fen);
+            if(result==null||!Arrays.deepEquals(result.screen,screen))throw new AssertionError("late diagram side="+side+" theme="+Arrays.toString(theme)+" fen="+fen+" differences="+differences(screen,result,reader.labelCosts(image,bounds)));
             // Same production adaptation used after the user reviews the diagram.
             reader.useTemplates(PieceClassifier.withObserved(bank,screen,reader.snapshotFeatures(image,bounds)),side);image.recycle();
             ChessPosition next=seed.position.successors().get(0);Bitmap moved=NativeVisionCheck.render(640,640,0,side==Side.WHITE?next.board:FenBuilder.flip(next.board),theme);
@@ -36,6 +36,10 @@ public class ScreenJoinTestActivity extends Activity {
         boolean[] uncertain=new boolean[64];uncertain[flipped?43:20]=true;
         setContentView(new PositionSetupView(this,flipped?FenBuilder.flip(seed.position.board):seed.position.board,uncertain,side,Side.WHITE,
             accepted->{if(accepted.error()!=null||accepted.position.turn!=Side.WHITE||accepted.perspective!=side||!Arrays.deepEquals(accepted.position.board,seed.position.board))throw new AssertionError("review changed position");TextView result=new TextView(this);result.setText("SCREEN_JOIN_UI_OK "+side);setContentView(result);save("screen-join-ui-result.txt","SCREEN_JOIN_UI_OK "+side);},()->{throw new AssertionError("review canceled");}));
+    }
+    private String differences(char[][] expected,DiagramReader.Result result,float[][] costs){
+        if(result==null)return "null";StringBuilder s=new StringBuilder();
+        for(int i=0;i<64;i++)if(expected[i/8][i%8]!=result.screen[i/8][i%8])s.append(ChessPosition.square(i/8,i%8)).append(':').append(expected[i/8][i%8]).append('/').append(result.screen[i/8][i%8]).append(' ').append(Arrays.toString(costs[i])).append("; ");return s.toString();
     }
     private void save(String name,String text){try(FileWriter w=new FileWriter(new File(getFilesDir(),name))){w.write(text);}catch(IOException e){throw new RuntimeException(e);}}
 }

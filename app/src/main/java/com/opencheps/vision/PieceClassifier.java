@@ -23,6 +23,7 @@ public class PieceClassifier {
     private PixelMask annotationMask=PixelMask.NONE;
     public synchronized void setAnnotationMask(PixelMask mask){annotationMask=mask==null?PixelMask.NONE:mask;}
     private SquareSampler.Sample[] templates;
+    private float[][] normalizedTemplates;
     private SquareSampler.Sample[] previousFrame;
     private char[] previousLabels;
     private char[] labels;
@@ -91,6 +92,7 @@ public class PieceClassifier {
         Side side = botAvg > topAvg ? Side.WHITE : Side.BLACK;
 
         char[] map = side == Side.WHITE ? START_WHITE_POV : flipLabels(START_WHITE_POV);
+        normalizedTemplates=null;
         templates = samples;
         labels = map;
         bootstrapSide = side;
@@ -219,12 +221,13 @@ public class PieceClassifier {
         if(samples==null)return null;
         float[][] costs=new float[64][VisualMoveTracker.PIECES.length()];
         for(int i=0;i<64;i++) {
-            float empty=SquareSampler.lumDistance(samples[i].feature,new float[samples[i].feature.length]);
+            float[] feature=normalizedTemplates==null?samples[i].feature:normalizeContrast(samples[i].feature);
+            float empty=SquareSampler.lumDistance(feature,new float[feature.length]);
             costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
             for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
                 char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;
                 for(int k=0;k<labels.length;k++)if(labels[k]==wanted) {
-                    float d=SquareSampler.lumDistance(samples[i].feature,templates[k].feature)/SquareSampler.N/SquareSampler.N;
+                    float d=SquareSampler.lumDistance(feature,normalizedTemplates==null?templates[k].feature:normalizedTemplates[k])/SquareSampler.N/SquareSampler.N;
                     if(d<best)best=d;
                 }
                 costs[i][j]=best;
@@ -248,12 +251,19 @@ public class PieceClassifier {
 
     /** Install an offline bank without assuming where any piece is currently standing. */
     public synchronized void useTemplates(PieceTemplates bank, Side perspective) {
-        templates=new SquareSampler.Sample[bank.entries.size()];labels=new char[templates.length];
+        templates=new SquareSampler.Sample[bank.entries.size()];labels=new char[templates.length];normalizedTemplates=new float[templates.length][];
         for(int i=0;i<templates.length;i++){
             PieceTemplates.Entry e=bank.entries.get(i);labels[i]=e.piece;
             templates[i]=new SquareSampler.Sample(e.feature.clone(),0,0,0,0,0);
+            normalizedTemplates[i]=normalizeContrast(e.feature);
         }
         previousFrame=null;previousLabels=null;bootstrapSide=perspective;trained=bank.complete();
+    }
+    /** Preserve the foreground luminance while compensating for faint piece/background contrast. */
+    public static float[] normalizeContrast(float[] feature) {
+        float peak=0;for(int i=0;i+1<feature.length;i+=2){float ink=feature[i]+feature[i+1];if(Float.isFinite(ink))peak=Math.max(peak,ink);}
+        float gain=Math.min(5f,1f/Math.max(.2f,peak));float[] out=feature.clone();
+        for(int i=0;i<out.length;i++)out[i]*=gain;return out;
     }
     public synchronized PieceTemplates exportTemplates() {
         java.util.List<PieceTemplates.Entry> entries=new java.util.ArrayList<>();
@@ -262,7 +272,7 @@ public class PieceClassifier {
     }
 
     public synchronized void reset() {
-        templates = null;
+        templates = null;normalizedTemplates=null;
         labels = null;
         previousFrame = null;
         previousLabels = null;
