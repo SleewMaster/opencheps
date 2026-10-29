@@ -21,6 +21,8 @@ public class PieceClassifier {
     };
 
     private PixelMask annotationMask=PixelMask.NONE;
+    private boolean cameraMode;
+    public synchronized void setCameraMode(boolean enabled){cameraMode=enabled;}
     public synchronized void setAnnotationMask(PixelMask mask){annotationMask=mask==null?PixelMask.NONE:mask;}
     private SquareSampler.Sample[] templates;
     private float[][] normalizedTemplates;
@@ -178,7 +180,7 @@ public class PieceClassifier {
             for (int f = 0; f < 8; f++) {
                 int cx = Math.round(board.left + (f + 0.5f) * board.square);
                 int cy = Math.round(board.top  + (r + 0.5f) * board.square);
-                samples[r * 8 + f] = SquareSampler.sample(bmp, cx, cy, rad, annotationMask);
+                samples[r * 8 + f] = cameraMode?SquareSampler.sampleCamera(bmp,cx,cy,rad,annotationMask):SquareSampler.sample(bmp, cx, cy, rad, annotationMask);
             }
         }
         return samples;

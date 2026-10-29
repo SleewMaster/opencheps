@@ -32,7 +32,7 @@ public final class CameraBoard {
     private Review pendingReview;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
     public CameraBoard(Side perspective){this(perspective,java.util.Collections.emptyList());}
-    public CameraBoard(Side perspective,java.util.List<PieceTemplates> banks){this.perspective=perspective;this.banks=new java.util.ArrayList<>(banks);}
+    public CameraBoard(Side perspective,java.util.List<PieceTemplates> banks){this.perspective=perspective;this.banks=new java.util.ArrayList<>(banks);classifier.setCameraMode(true);}
     public static java.util.List<PieceTemplates> loadBanks(android.content.Context context){
         java.util.List<PieceTemplates> result=new java.util.ArrayList<>();
         for(String file:new String[]{"camera-templates.txt","screen-templates.txt"})try(java.io.InputStream in=new java.io.FileInputStream(new java.io.File(context.getFilesDir(),file))){result.add(PieceTemplates.read(in));}catch(Exception ignored){}
@@ -65,7 +65,7 @@ public final class CameraBoard {
         if(classifier.isTrained())candidates.add(0,classifier.exportTemplates());
         PieceClassifier selected=null;DiagramReader.Result best=null;float score=Float.POSITIVE_INFINITY;
         for(PieceTemplates bank:candidates){
-            PieceClassifier reader=new PieceClassifier();reader.useTemplates(bank,perspective);
+            PieceClassifier reader=new PieceClassifier();reader.setCameraMode(true);reader.useTemplates(bank,perspective);
             DiagramReader.Result d=DiagramReader.read(reader.labelCosts(square,bounds));if(d==null)continue;
             float rank=d.error;for(boolean u:d.uncertain)if(u)rank+=.005f;
             if(rank<score){score=rank;best=d;selected=reader;}

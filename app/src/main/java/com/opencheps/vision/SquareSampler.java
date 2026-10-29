@@ -24,7 +24,9 @@ public class SquareSampler {
         return sample(bmp,cx,cy,rad,PixelMask.NONE);
     }
 
-    public static Sample sample(Bitmap bmp,int cx,int cy,int rad,PixelMask mask) {
+    public static Sample sample(Bitmap bmp,int cx,int cy,int rad,PixelMask mask) {return sample(bmp,cx,cy,rad,mask,false);}
+    public static Sample sampleCamera(Bitmap bmp,int cx,int cy,int rad,PixelMask mask) {return sample(bmp,cx,cy,rad,mask,true);}
+    private static Sample sample(Bitmap bmp,int cx,int cy,int rad,PixelMask mask,boolean camera) {
         int W = bmp.getWidth(), H = bmp.getHeight();
         int size = rad * 2;
         int x0 = Math.max(0, cx - rad);
@@ -61,12 +63,22 @@ public class SquareSampler {
             for (int x = 0; x < N; x++) {
                 int sx = (x * w) / N;
                 int p = px[rowBase + sx];
+                if(camera){
+                    // Max-pool the small sample footprint so a thin, moving outline cannot
+                    // disappear between point samples. Keep its actual foreground colour.
+                    float strongest=-1;int rx=Math.max(1,w/N/2),ry=Math.max(1,h/N/2);
+                    for(int yy=Math.max(0,sy-ry);yy<=Math.min(h-1,sy+ry);yy++)for(int xx=Math.max(0,sx-rx);xx<=Math.min(w-1,sx+rx);xx++){
+                        if(mask.excludes(x0+xx,y0+yy))continue;
+                        int v=px[yy*w+xx];float distance=Math.max(Math.abs(((v>>16)&255)/255f-bg[0]),Math.max(Math.abs(((v>>8)&255)/255f-bg[1]),Math.abs((v&255)/255f-bg[2])));
+                        if(distance>strongest){strongest=distance;p=v;}
+                    }
+                }
                 float rf = ((p >> 16) & 0xFF) / 255f;
                 float gf = ((p >> 8)  & 0xFF) / 255f;
                 float bf = ( p        & 0xFF) / 255f;
                 lumGrid[y * N + x] = 0.299f * rf + 0.587f * gf + 0.114f * bf;
                 float contrast=Math.max(Math.abs(rf-bg[0]),Math.max(Math.abs(gf-bg[1]),Math.abs(bf-bg[2])));
-                float ink=Math.min(1f,Math.max(0f,(contrast-.045f)/.10f));
+                float ink=Math.min(1f,Math.max(0f,(contrast-(camera?.015f:.045f))/.10f));
                 float l=lumGrid[y*N+x];
                 shape[(y*N+x)*2]=ink*l;
                 shape[(y*N+x)*2+1]=ink*(1-l);

@@ -136,7 +136,7 @@ public class CameraVisionTestActivity extends Activity {
             CameraBoard.FrameResult seen=null;
             for(int n=0;n<4;n++){seen=session.readFrame(shot,corners);if(seen.position!=null)throw new AssertionError("midgame auto-started without review");if(seen.review!=null)break;}
             if(seen.review==null)throw new AssertionError("midgame review missing "+fen+" "+side+" "+seen.problem);
-            if(!java.util.Arrays.deepEquals(seen.review.diagram.screen,screen))throw new AssertionError("midgame camera diagram "+fen+" "+side+" theme="+theme+" seen="+java.util.Arrays.deepToString(seen.review.diagram.screen));
+            if(!java.util.Arrays.deepEquals(seen.review.diagram.screen,screen)){save(shot,"camera-photo.png");throw new AssertionError("midgame camera diagram "+fen+" "+side+" theme="+theme+" seen="+java.util.Arrays.deepToString(seen.review.diagram.screen));}
             session.applyReview(seen.review,seed);
             if(session.readFrame(shot,corners).position!=null)throw new AssertionError("review bypassed fresh-frame consensus");
             seen=session.readFrame(shot,corners);
