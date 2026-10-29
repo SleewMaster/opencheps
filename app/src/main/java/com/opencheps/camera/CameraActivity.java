@@ -18,6 +18,7 @@ import com.opencheps.capture.ScreenCaptureService;
 import com.opencheps.engine.*;
 import com.opencheps.util.*;
 import com.opencheps.vision.ChessPosition;
+import com.opencheps.overlay.PositionSetupView;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -28,7 +29,9 @@ public class CameraActivity extends AppCompatActivity {
     private final StockfishEngine engine=new StockfishEngine();
     private PreviewView preview;
     private CameraBoardView boardView;
-    private CameraHintBoardView hintBoard;
+    private android.app.Dialog reviewDialog;
+    private boolean reviewApplying;
+    private List<com.opencheps.vision.PieceTemplates> templateBanks;
     private ChessPosition verifiedPosition;
     private PositionHistory.Snapshot verifiedSearch;
     private final CompletedAdvice adviceCache=new CompletedAdvice();
@@ -58,6 +61,7 @@ public class CameraActivity extends AppCompatActivity {
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         ScreenCaptureService.stopSession(this);userSide="b".equals(Prefs.userSide(this))?Side.BLACK:Side.WHITE;
+        templateBanks=CameraBoard.loadBanks(this);
         buildUi();
         speech=new CameraSpeech(this,(ready,message)->{
             if(destroyed)return;
@@ -69,7 +73,7 @@ public class CameraActivity extends AppCompatActivity {
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)openCamera();
         else permission.launch(Manifest.permission.CAMERA);
         analysis.execute(()->{
-            try{engine.start(getApplicationContext());main.post(()->{if(!destroyed){engineReady=true;if(!boardView.editing())status.setText("Покажи начальную расстановку и удерживай телефон");}});}
+            try{engine.start(getApplicationContext());main.post(()->{if(!destroyed){engineReady=true;if(!boardView.editing())status.setText("Покажи доску и удерживай телефон");}});}
             catch(Exception e){main.post(()->{if(!destroyed){engineFailed=true;status.setText("Не удалось запустить Stockfish. Закрой и открой режим камеры.");}});}
         });
     }
@@ -82,11 +86,10 @@ public class CameraActivity extends AppCompatActivity {
         Button back=button("‹ Назад");top.addView(back,new LinearLayout.LayoutParams(dp(90),dp(48)));back.setOnClickListener(v->finish());
         TextView title=text("КАМЕРА  /  LIVE",14,0xffb9f66e);title.setGravity(Gravity.CENTER);top.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));
         Button close=button("Закрыть");top.addView(close,new LinearLayout.LayoutParams(dp(86),dp(48)));close.setOnClickListener(v->finish());
-        TextView help=text("Наведи на 2D-доску в начальной расстановке и нажми «Начать». Рамку подгоню к клеткам. Подсказка: выделенная фигура → зелёная клетка; справа появится ровная доска.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
+        TextView help=text("Наведи на 2D-доску в любой позиции и нажми «Начать». Проверь фигуры и чей ход. Стрелка покажет ход прямо на доске.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
         FrameLayout stage=new FrameLayout(this);root.addView(stage,new LinearLayout.LayoutParams(-1,0,1));
         preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FILL_CENTER);stage.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         boardView=new CameraBoardView(this);stage.addView(boardView,new FrameLayout.LayoutParams(-1,-1));
-        hintBoard=new CameraHintBoardView(this);FrameLayout.LayoutParams inset=new FrameLayout.LayoutParams(dp(144),dp(144),Gravity.BOTTOM|Gravity.RIGHT);inset.setMargins(dp(8),dp(8),dp(8),dp(8));stage.addView(hintBoard,inset);
         boardView.onSizeChanged=()->reset(true);
         preview.getPreviewStreamState().observe(this,state->{
             streaming=state==PreviewView.StreamState.STREAMING;
@@ -111,10 +114,15 @@ public class CameraActivity extends AppCompatActivity {
             if(!boardView.editing()){invalidateAdvice();boardView.setEditing(true);apply.setText("Применить");status.setText("Выставь углы клеток и нажми «Применить». Текущая партия сохранится.");return;}
             if(!streaming){openCamera();status.setText("Дождись изображения камеры");return;}
             if(!CameraGeometry.valid(boardView.corners(),boardView.getWidth(),boardView.getHeight())){status.setText("Углы должны образовывать большую выпуклую доску без пересечений");return;}
-            if(board==null){reset(false);board=new CameraBoard(perspective);}else{invalidateAdvice();board.requestReframe();}boardView.setEditing(false);apply.setText("Углы заново");paused=false;pause.setText("Пауза");status.setText("Ищу сетку и подтверждаю положение фигур");
+            if(board==null){reset(false);board=new CameraBoard(perspective,templateBanks);}else{invalidateAdvice();board.requestReframe();}boardView.setEditing(false);apply.setText("Углы заново");paused=false;pause.setText("Пауза");status.setText("Ищу сетку и подтверждаю положение фигур");
         });
         pause=button("Пауза");buttons.addView(pause,new LinearLayout.LayoutParams(0,dp(52),1));pause.setOnClickListener(v->{
             paused=!paused;invalidateAdvice();pause.setText(paused?"Продолжить":"Пауза");status.setText(paused?"Пауза · камера открыта":"Продолжаю распознавание");
+        });
+        Button positionButton=button("Позиция · начать с текущей");root.addView(positionButton,new LinearLayout.LayoutParams(-1,dp(42)));
+        positionButton.setOnClickListener(v->{
+            if(board==null||boardView.editing()){status.setText("Выставь углы доски и нажми «Начать»");return;}
+            invalidateAdvice();board.requestReview();paused=false;pause.setText("Пауза");status.setText("Читаю текущую позицию…");
         });
         LinearLayout audio=new LinearLayout(this);audio.setGravity(Gravity.CENTER_VERTICAL);root.addView(audio,new LinearLayout.LayoutParams(-1,dp(48)));
         voiceToggle=new CheckBox(this);voiceToggle.setText("Озвучивать ход");voiceToggle.setTextSize(12);voiceToggle.setTextColor(0xffb9f66e);voiceToggle.setChecked(Prefs.get(this).getBoolean("camera_voice",true));audio.addView(voiceToggle,new LinearLayout.LayoutParams(0,-1,1));
@@ -148,9 +156,9 @@ public class CameraActivity extends AppCompatActivity {
         announcement.reset();
         if(boardView!=null)boardView.setEditing(editing);
         if(apply!=null)apply.setText("Начать");
-        if(status!=null)status.setText("Выставь углы на начальной позиции. Снизу должен быть выбранный цвет.");
+        if(status!=null)status.setText("Выставь углы текущей доски. Снизу должен быть выбранный цвет.");
     }
-    private void clearHintViews(){if(boardView!=null)boardView.clear();if(hintBoard!=null)hintBoard.clear();}
+    private void clearHintViews(){if(boardView!=null)boardView.clear();}
     private void stopSpeech(){if(speech!=null&&speech.stop())announcement.reset();}
     private void invalidateAdvice(){generation++;verifiedFen="";verifiedPosition=null;verifiedSearch=null;displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();activeSearchKey="";engine.cancelSearch();stopSpeech();updateRepeat();if(boardView!=null)clearHintViews();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
     private void suspendAdvice(boolean hide){
@@ -162,7 +170,7 @@ public class CameraActivity extends AppCompatActivity {
     }
     private final Runnable tick=new Runnable(){@Override public void run(){
         if(!active||destroyed)return;main.postDelayed(this,220);
-        if(paused||processing||board==null||boardView.editing()||!streaming)return;
+        if(paused||processing||reviewDialog!=null||reviewApplying||board==null||boardView.editing()||!streaming)return;
         Bitmap frame=preview.getBitmap();if(frame==null){invalidateAdvice();return;}
         final int token=generation;final CameraBoard session=board;final float[] corners=boardView.corners();processing=true;
         vision.execute(()->{
@@ -171,6 +179,7 @@ public class CameraActivity extends AppCompatActivity {
             finally{frame.recycle();}
             CameraBoard.FrameResult observation=result;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
                 if(observation!=null&&observation.corners!=null)boardView.setTrackedCorners(observation.corners);
+                if(observation!=null&&observation.review!=null){openReview(session,observation.review);return;}
                 ChessPosition answer=observation==null?null:observation.position;
                 if(answer==null||observation.history==null){
                     boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
@@ -193,6 +202,25 @@ public class CameraActivity extends AppCompatActivity {
             });
         });
     }};
+    private void openReview(CameraBoard session,CameraBoard.Review review){
+        if(reviewDialog!=null||destroyed)return;
+        invalidateAdvice();
+        android.app.Dialog dialog=new android.app.Dialog(this,android.R.style.Theme_Material_NoActionBar);reviewDialog=dialog;
+        Runnable cancel=()->{if(reviewDialog!=dialog)return;reviewDialog=null;dialog.dismiss();vision.execute(session::cancelReview);status.setText("Проверка отменена · нажми «Позиция», когда будешь готов");};
+        PositionSetupView editor=new PositionSetupView(this,review.diagram.screen,review.diagram.uncertain,review.perspective,userSide,seed->{
+            if(reviewDialog!=dialog)return;reviewDialog=null;reviewApplying=true;dialog.dismiss();invalidateAdvice();adviceCache.clear();
+            perspective=seed.perspective;orientation.setText(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");
+            status.setText("Проверяю текущую доску после подтверждения…");
+            vision.execute(()->{
+                try{session.applyReview(review,seed);
+                    try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getFilesDir(),"camera-templates.txt"))){session.templates().write(out);}catch(Exception ignored){}
+                    main.post(()->{reviewApplying=false;if(!destroyed&&session==board)status.setText("Позиция принята · жду чёткий кадр доски");});
+                }catch(RuntimeException e){main.post(()->{reviewApplying=false;if(!destroyed)status.setText("Не удалось применить позицию · попробуй ещё раз");});}
+            });
+        },cancel);
+        dialog.setContentView(editor);dialog.setOnCancelListener(d->cancel.run());dialog.show();
+        if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
+    }
     private void analyze(PositionHistory.Snapshot search){
         final String fen=search.fen;
         analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
@@ -219,7 +247,7 @@ public class CameraActivity extends AppCompatActivity {
         String score=best.mate?"мат "+Math.abs(100000-Math.abs(best.cp)):String.format(Locale.forLanguageTag("ru"),"%+.2f",best.cp/100f);
         String label=MoveAnnouncement.label(verifiedFen,uci);
         moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+(best.depth>0?"\nОценка "+score:""));
-        if(verifiedPosition!=null)hintBoard.show(verifiedPosition,uci,perspective);
+
         status.setText((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные"));
     }
     private boolean canAnnounce(){return active&&!destroyed&&!paused&&speech!=null&&speech.ready()&&voiceToggle.isChecked()&&displayComplete&&!displayed.isEmpty()&&!verifiedFen.isEmpty()&&verifiedFen.equals(displayFen);}
@@ -232,5 +260,5 @@ public class CameraActivity extends AppCompatActivity {
     }
     @Override protected void onResume(){super.onResume();active=true;main.removeCallbacks(tick);main.post(tick);}
     @Override protected void onPause(){active=false;main.removeCallbacks(tick);invalidateAdvice();super.onPause();}
-    @Override protected void onDestroy(){destroyed=true;active=false;main.removeCallbacksAndMessages(null);if(speech!=null)speech.close();engine.cancelSearch();vision.shutdown();analysis.execute(engine::stop);analysis.shutdown();if(provider!=null)provider.unbindAll();super.onDestroy();}
+    @Override protected void onDestroy(){destroyed=true;if(reviewDialog!=null){reviewDialog.dismiss();reviewDialog=null;}active=false;main.removeCallbacksAndMessages(null);if(speech!=null)speech.close();engine.cancelSearch();vision.shutdown();analysis.execute(engine::stop);analysis.shutdown();if(provider!=null)provider.unbindAll();super.onDestroy();}
 }

@@ -24,18 +24,69 @@ public final class CameraBoard {
     private boolean covered;
     private CameraBackground background;
     private final int[] boardPixels=new int[SIZE*SIZE];
-    private final Side perspective;
+    private Side perspective;
+    private final java.util.List<PieceTemplates> banks;
+    private final FrameConsensus reviewConsensus=new FrameConsensus();
+    private volatile boolean reviewRequested;
+    private boolean autoReviewOff;
+    private Review pendingReview;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
-    public CameraBoard(Side perspective){this.perspective=perspective;}
+    public CameraBoard(Side perspective){this(perspective,java.util.Collections.emptyList());}
+    public CameraBoard(Side perspective,java.util.List<PieceTemplates> banks){this.perspective=perspective;this.banks=new java.util.ArrayList<>(banks);}
+    public static java.util.List<PieceTemplates> loadBanks(android.content.Context context){
+        java.util.List<PieceTemplates> result=new java.util.ArrayList<>();
+        for(String file:new String[]{"camera-templates.txt","screen-templates.txt"})try(java.io.InputStream in=new java.io.FileInputStream(new java.io.File(context.getFilesDir(),file))){result.add(PieceTemplates.read(in));}catch(Exception ignored){}
+        try(java.io.InputStream in=context.getAssets().open("vision/neo-v1.txt")){result.add(PieceTemplates.read(in));}catch(Exception ignored){}
+        return result;
+    }
+    public static final class Review {
+        public final DiagramReader.Result diagram;
+        public final Side perspective;
+        private final PieceTemplates bank;
+        private final float[][] features;
+        private final int[] pixels;
+        Review(DiagramReader.Result d,Side side,PieceTemplates bank,float[][] features,int[] pixels){diagram=d;perspective=side;this.bank=bank;this.features=features;this.pixels=pixels;}
+    }
+    public void requestReview(){reviewRequested=true;autoReviewOff=false;}
+    public void cancelReview(){reviewRequested=false;autoReviewOff=true;pendingReview=null;reviewConsensus.accept(null);}
+    /** Called on the vision executor after explicit review; a fresh frame must still verify it. */
+    public void applyReview(Review review,PositionSeed seed){
+        if(seed==null||seed.error()!=null)throw new IllegalArgumentException("Invalid reviewed position");
+        perspective=seed.perspective;
+        char[][] screen=perspective==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
+        classifier.useTemplates(PieceClassifier.withObserved(review.bank,screen,review.features),perspective);
+        position=seed.position;history.reset(seed.fen());confidenceScale=1;
+        background=new CameraBackground(review.pixels,SIZE,SIZE);
+        consensus.accept(null);consensus.accept(null);cancelReview();
+    }
+    public PieceTemplates templates(){return classifier.exportTemplates();}
+    private Review readReview(Bitmap square){
+        java.util.List<PieceTemplates> candidates=new java.util.ArrayList<>(banks);
+        if(classifier.isTrained())candidates.add(0,classifier.exportTemplates());
+        PieceClassifier selected=null;DiagramReader.Result best=null;float score=Float.POSITIVE_INFINITY;
+        for(PieceTemplates bank:candidates){
+            PieceClassifier reader=new PieceClassifier();reader.useTemplates(bank,perspective);
+            DiagramReader.Result d=DiagramReader.read(reader.labelCosts(square,bounds));if(d==null)continue;
+            float rank=d.error;for(boolean u:d.uncertain)if(u)rank+=.005f;
+            if(rank<score){score=rank;best=d;selected=reader;}
+        }
+        if(best==null){problem="Нет шаблонов фигур. Покажи начальную позицию один раз.";return null;}
+        String key=java.util.Arrays.deepToString(best.screen);
+        if(!reviewConsensus.accept(key)){problem="Читаю текущую позицию · удерживай доску в кадре";return null;}
+        int[] pixels=new int[SIZE*SIZE];square.getPixels(pixels,0,SIZE,0,0,SIZE,SIZE);
+        return new Review(best,perspective,selected.exportTemplates(),selected.snapshotFeatures(square,bounds),pixels);
+    }
     public static final class FrameResult {
         public final ChessPosition position;
         public final float[] corners;
         public final boolean tracked,readable,pendingChange;
         public final String problem;
         public final PositionHistory.Snapshot history;
+        public final Review review;
         FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending){this(p,c,tracked,readable,pending,"");}
         FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem){this(p,c,tracked,readable,pending,problem,null);}
-        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem,PositionHistory.Snapshot history){position=p;corners=c;this.tracked=tracked;this.readable=readable;pendingChange=pending;this.problem=problem;this.history=history;}
+        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem,PositionHistory.Snapshot history){this(p,c,tracked,readable,pending,problem,history,null);}
+        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem,PositionHistory.Snapshot history,Review review){this.review=review;position=p;corners=c;this.tracked=tracked;this.readable=readable;pendingChange=pending;this.problem=problem;this.history=history;}
     }
     /** Refit geometry without discarding the learned pieces and current legal position. */
     public void requestReframe(){reframe=true;}
@@ -51,6 +102,7 @@ public final class CameraBoard {
         if(reframe){reframe=false;recoverGeometry();}
         if(!gridLocked){
             float[] snapped=BoardGridLocator.locate(gray,scaled);
+            if(snapped==null)snapped=BoardGridLocator.locateExpanded(gray,scaled);
             if(snapped==null)snapped=BoardGridLocator.locate(gray,new float[]{2,2,gray.width-3,2,gray.width-3,gray.height-3,2,gray.height-3});
             if(snapped==null)return new FrameResult(null,null,false,true,false,"Не нахожу сетку 8×8. Покажи доску целиком; рамка должна охватывать клетки.");
             scaled=snapped;
@@ -66,8 +118,8 @@ public final class CameraBoard {
         try {
             ChessPosition p=read(square);
             if(p!=null){recovering=false;recoveryFailures=0;}
-            else if(recovering&&++recoveryFailures>=3)recoverGeometry();
-            return new FrameResult(p,real,true,!covered,pendingChange,problem,p==null?null:history.snapshot());
+            else if(pendingReview==null&&recovering&&++recoveryFailures>=3)recoverGeometry();
+            return new FrameResult(p,real,true,!covered,pendingChange,problem,p==null?null:history.snapshot(),pendingReview);
         }
         finally {square.recycle();}
     }
@@ -88,11 +140,13 @@ public final class CameraBoard {
         out.recycle();small.recycle();return filtered;
     }
     public ChessPosition read(Bitmap rectified) {
+        pendingReview=null;
         pendingChange=false;
         covered=false;
         problem="";
+        if(reviewRequested){pendingReview=readReview(rectified);return null;}
         if(!classifier.isTrained()) {
-            if(!classifier.tryBootstrap(rectified,bounds)){problem="Сетку вижу. Для обучения покажи начальную расстановку; проверь фокус и блики.";return null;}
+            if(!classifier.tryBootstrap(rectified,bounds)){if(!autoReviewOff)pendingReview=readReview(rectified);else problem="Нажми «Позиция», чтобы начать с текущей расстановки.";return null;}
             // Reject a disagreement rather than attaching opposite labels to the templates.
             if(classifier.bootstrapSide()!=perspective){classifier.reset();problem="Сетку вижу. Проверь кнопку «Снизу»: цвет должен совпадать с нижними фигурами.";return null;}
             confidenceScale=CameraConfidence.scale(classifier.labelCosts(rectified,bounds));

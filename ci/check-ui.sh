@@ -191,6 +191,8 @@ python3 - <<'PYUI'
 import xml.etree.ElementTree as E,re,subprocess
 nodes=list(E.parse('ui-proof/camera.xml').iter('node'))
 assert any('КАМЕРА  /  LIVE'==n.get('text') for n in nodes)
+assert any('Позиция · начать с текущей'==n.get('text') for n in nodes)
+assert not any('маленькая доска' in n.get('content-desc','').lower() for n in nodes)
 assert not any('media_projection' in n.get('resource-id','') for n in nodes)
 assert any(n.get('text')=='Озвучивать ход' and n.get('checked')=='true' for n in nodes),'voice toggle missing'
 assert any(n.get('text')=='Повторить' and n.get('enabled')=='false' for n in nodes),'unverified move must not be repeatable'
@@ -225,7 +227,7 @@ for attempt in $(seq 1 180); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 # Both production arrow views must render a named legal move in either orientation.
@@ -241,8 +243,8 @@ import xml.etree.ElementTree as E
 for side,expected in [('w','Пешка  e2 → e4'),('b','Конь  g8 → f6')]:
  nodes=list(E.parse('ui-proof/camera-hint-'+side+'.xml').iter('node'))
  assert any(n.get('text')==expected for n in nodes),expected
- assert any(n.get('content-desc')==expected for n in nodes),'mini board missing '+expected
-print('CAMERA_HINT_OK figure, source, destination, camera arrow and stable board in both orientations')
+ assert any(n.get('content-desc')=='Ход '+('e2e4' if side=='w' else 'g8f6') for n in nodes),'camera arrow missing '+expected
+print('CAMERA_HINT_OK figure, source, destination, unobstructed camera arrow in both orientations')
 PYHINT
 
 # Denied permission must leave a usable camera screen and a working exit.

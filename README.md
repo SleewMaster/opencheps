@@ -1,8 +1,8 @@
-## 0.11.0: история партии и восстановление камеры
+## 0.11.0: камера с текущей позиции и история партии
 
 Движок теперь получает исходную FEN и все подтверждённые ходы. Он учитывает повторения, права рокировки, взятие на проходе и счётчик 50 ходов. Раньше передавалась только текущая FEN, поэтому история повторений терялась. При старте посреди партии известны только новые ходы после подключения; предыдущие повторения из изображения восстановить нельзя. Победа в каждой позиции не гарантируется.
 
-Камера показывает только окончательный ход. Краткая потеря резкости больше не обнуляет время расчёта: результат сохраняется для той же истории и отображается только после проверки доски. После потери слежения сетка автоматически ищется заново; изученные фигуры и партия сохраняются. При исчезновении доски в захвате экрана убирается и устаревший текст совета.
+Мини-доска поверх камеры убрана: стрелка и подсветка клеток рисуются прямо на изображении. Камера теперь может подключиться к текущей 2D-позиции: проверь распознанные фигуры и очередь хода в полноэкранной проверке, затем подтверди. Кнопка **Позиция · начать с текущей** позволяет повторить проверку. Камера показывает только окончательный ход. Краткая потеря резкости больше не обнуляет время расчёта: результат сохраняется для той же истории и отображается только после проверки доски. После потери слежения сетка автоматически ищется заново; изученные фигуры и партия сохраняются. При исчезновении доски в захвате экрана убирается и устаревший текст совета.
 
 ## Запуск посреди партии и стабильная подсказка
 
@@ -12,7 +12,7 @@
 
 Из одного снимка нельзя восстановить очередь хода, права на рокировку, последнее двойное продвижение пешки или счётчик 50 ходов. Рокировки и взятие на проходе при подключении по умолчанию выключены; укажите известные права или вставьте полный FEN. Затем новые ходы отслеживаются законными переходами. Свежий кадр перепроверяется до показа совета.
 
-Шаблоны — компактные векторы признаков из изолированных образцов фигур, предоставленных для разработки. Скриншоты, имена игроков и координаты экранов в приложении и репозитории не сохраняются. Иные стили могут потребовать исправления распознавания или однократного обучения с начальной позиции. Это изменение относится к захвату экрана; камера сохраняет свой процесс начальной калибровки.
+Шаблоны — компактные векторы признаков из изолированных образцов фигур, предоставленных для разработки. Скриншоты, имена игроков и координаты экранов в приложении и репозитории не сохраняются. Иные стили могут потребовать исправления распознавания или однократного обучения с начальной позиции. В камере распознавание текущей позиции работает после выравнивания сетки; исправленные образцы фигур сохраняются локально для следующих запусков.
 
 ---
 
@@ -20,7 +20,7 @@
 
 **[Скачать APK 0.11.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.11.0/OpenCheps_Bot_0.11.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.11.0)**
 
-Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана в начальной расстановке**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
+Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана, в том числе посреди партии**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
 
 Android chess analysis with Stockfish 18. Choose **Screen** or **Camera** on the main screen. This is an experimental build: recognition depends on the board theme, lighting and a correct initial calibration.
 
@@ -30,9 +30,11 @@ Grant display-over-apps and full-screen capture permissions and show a flat 2D c
 
 ## Camera
 
-Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, in the initial position. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the board fully visible; tap the image to focus after calibration. **Углы заново** lets you reframe the same game; return to the main screen to learn a different board.
+Camera permission is requested only when opening this mode. Screen capture and display-over-apps permissions are not needed. Point the rear camera at a **2D chess board on another screen**, including an ongoing game. Drag the four numbered corners clockwise from the top left. Select the colour at the bottom separately from the colour you play, then press **Начать**. Keep the board fully visible; tap the image to focus after calibration. **Углы заново** lets you reframe the same game; return to the main screen to learn a different board.
 
-The initial frame is snapped to the complete 8×8 checker grid before learning pieces. If the rough frame fails, the whole preview is searched. Extra monitor margins are excluded. «Углы заново» now re-applies geometry without discarding the trained pieces or current game. The phone shows a stable miniature board, a wide arrow, source/destination highlights and a named move such as «Конь g1 → f3». Diagnostic messages distinguish missing grid, blur, wrong bottom colour and unrecognised pieces.
+The initial frame is snapped to the complete 8×8 checker grid before learning pieces. If the rough frame fails, the whole preview is searched. Extra monitor margins are excluded. «Углы заново» now re-applies geometry without discarding the trained pieces or current game. The obstructing miniature board is removed. The phone shows a wide arrow directly on the camera board, source/destination highlights and a named move such as «Конь g1 → f3». Diagnostic messages distinguish missing grid, blur, wrong bottom colour and unrecognised pieces.
+
+To join a current position, the offline piece bank supplies a diagram for full-screen review. Correct uncertain pieces, select the side to move and known history fields, or import FEN. Confirming closes the editor; two fresh agreeing frames are required before advice. **Позиция · начать с текущей** reopens this process. Camera and saved screen themes are available along with built-in Neo descriptors; recognition is not guaranteed for every piece style.
 
 The selected quadrilateral is rectified to a 640 × 640 board before template recognition. Legal positions, including two missed plies, are considered; two clear matching observations are required to accept a position. Uncertain frames hide advice. Hints are projected back into the camera preview using the same four corners. Preview sampling excludes the app's own drawn hints.
 
@@ -42,7 +44,7 @@ Camera hand-shake stabilization registers grid intersections against a fixed ref
 
 Camera stops when the activity leaves the foreground. Returning clears old hints; changing size/orientation or recreating the activity requires calibration again. No frames are saved or uploaded. There is no microphone or network permission.
 
-Physical 3D chess pieces, arbitrary mid-game calibration, glare, occlusion and all board themes are **not supported or guaranteed**. Camera compatibility is tested with Android's virtual camera and synthetic perspective images; a physical-device field test is still needed.
+Physical 3D chess pieces, glare, occlusion and all board themes are **not supported or guaranteed**. Camera compatibility is tested with Android's virtual camera and synthetic perspective images; a physical-device field test is still needed.
 
 ## Engine and build
 

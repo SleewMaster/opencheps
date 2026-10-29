@@ -8,7 +8,7 @@ public class CameraVisionTestActivity extends Activity {
     private static final String[] START={"rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"};
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
-        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse()+" RECOVERY_OK "+checkRecovery();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
+        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse()+" RECOVERY_OK "+checkRecovery()+" JOIN_OK "+checkJoin();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
     private int check(){int passed=0;
@@ -116,6 +116,35 @@ public class CameraVisionTestActivity extends Activity {
                 if(expected==nf3&&(result.history.plies!=3||result.history.halfmove!=1||!result.history.command.endsWith(" moves e2e4 e7e5 g1f3")))throw new AssertionError("post-recovery move missing");
                 raw.recycle();shot.recycle();
             }passed++;
+        }return passed;
+    }
+    private int checkJoin(){int passed=0;
+        char[][] initial=new char[8][];for(int r=0;r<8;r++)initial[r]=START[r].toCharArray();
+        Bitmap training=NativeVisionCheck.render(640,640,0,initial,THEMES[0]);PieceClassifier learned=new PieceClassifier();
+        if(!learned.tryBootstrap(training,new BoardDetector.Board(0,0,640,1)))throw new AssertionError("join template fixture");
+        PieceTemplates bank=learned.exportTemplates();training.recycle();
+        String[] fens={"8/n5r1/4Q1pk/P7/7P/8/6P1/6K1 w - - 11 40","4k3/pp3ppp/2n1b3/3pP3/8/2N2N2/PP3PPP/4K2R w - - 7 20","4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 20"};
+        float[] corners={120,80,660,140,700,720,60,760};
+        for(String fen:fens)for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int theme=0;theme<3;theme++){
+            PositionSeed seed=PositionSeed.parse(fen,side);char[][] screen=side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));
+            Bitmap raw=NativeVisionCheck.render(640,640,0,screen,THEMES[theme]),shot=photograph(raw,corners,true);
+            CameraBoard.FrameResult seen=null;
+            for(int n=0;n<4;n++){seen=session.readFrame(shot,corners);if(seen.position!=null)throw new AssertionError("midgame auto-started without review");if(seen.review!=null)break;}
+            if(seen.review==null)throw new AssertionError("midgame review missing "+fen+" "+side+" "+seen.problem);
+            if(!java.util.Arrays.deepEquals(seen.review.diagram.screen,screen))throw new AssertionError("midgame camera diagram "+fen+" "+side+" theme="+theme+" seen="+java.util.Arrays.deepToString(seen.review.diagram.screen));
+            session.applyReview(seen.review,seed);
+            if(session.readFrame(shot,corners).position!=null)throw new AssertionError("review bypassed fresh-frame consensus");
+            seen=session.readFrame(shot,corners);
+            if(seen.position==null||!fen.equals(seen.history.fen)||seen.history.plies!=0)throw new AssertionError("reviewed camera seed not verified "+fen+" reason="+seen.problem);
+            raw.recycle();shot.recycle();
+            ChessPosition next=seed.position.successors().get(0);
+            raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?next.board:FenBuilder.flip(next.board),THEMES[theme]);shot=photograph(raw,shaken(corners,1),true);
+            for(int n=0;n<4;n++){seen=session.readFrame(shot,corners);if(seen.position!=null)break;}
+            if(seen.position==null||!java.util.Arrays.deepEquals(seen.position.board,next.board)||seen.history.plies!=1)throw new AssertionError("camera joined continuation "+fen+" "+next.move+" "+side+" theme="+theme+" "+seen.problem);
+            session.requestReview();seen=session.readFrame(shot,corners);seen=session.readFrame(shot,corners);
+            if(seen.review==null)throw new AssertionError("manual position review missing");
+            session.cancelReview();raw.recycle();shot.recycle();passed++;
         }return passed;
     }
     private float[] shaken(float[] corners,int step){

@@ -26,4 +26,5 @@ public class BoardGridLocatorTest {
     @Test public void missingFileIsNotEightByEight(){assertNull(BoardGridLocator.locate(scene(false,false,1),ROUGH));}
     @Test public void uniformFrameRejected(){assertNull(BoardGridLocator.locate(new BoardMotionTracker.Frame(W,H,new float[W*H]),ROUGH));}
     @Test public void stripesRejected(){float[] p=new float[W*H];for(int y=0;y<H;y++)for(int x=0;x<W;x++)p[y*W+x]=((x/42)&1)==0?220:100;assertNull(BoardGridLocator.locate(new BoardMotionTracker.Frame(W,H,p),ROUGH));}
+    @Test public void recoverySearchIncludesBoardOutsideOldCrop(){float[] shifted=TRUE.clone();for(int i=0;i<4;i++){shifted[2*i]-=28;shifted[2*i+1]-=20;}check(BoardGridLocator.locateExpanded(scene(false,true,0),shifted));}
 }

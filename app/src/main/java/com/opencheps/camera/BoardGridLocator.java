@@ -41,6 +41,17 @@ public final class BoardGridLocator {
         }
         return output;
     }
+    /** Search beyond the previous crop after a translation, retaining its perspective. */
+    public static float[] locateExpanded(BoardMotionTracker.Frame frame,float[] previous){
+        if(previous==null||previous.length!=8)return null;
+        float cx=0,cy=0;for(int i=0;i<4;i++){cx+=previous[2*i]/4;cy+=previous[2*i+1]/4;}
+        float[] expanded=new float[8];
+        for(int i=0;i<4;i++){
+            expanded[2*i]=Math.max(1,Math.min(frame.width-2,cx+(previous[2*i]-cx)*1.32f));
+            expanded[2*i+1]=Math.max(1,Math.min(frame.height-2,cy+(previous[2*i+1]-cy)*1.32f));
+        }
+        return locate(frame,expanded);
+    }
     private static java.util.List<double[]> axis(BoardMotionTracker.Frame image,boolean vertical){
         double[] response=new double[S];
         for(int i=4;i<S-4;i++){
