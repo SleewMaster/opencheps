@@ -223,7 +223,7 @@ public class PieceClassifier {
             costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
             for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
                 char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;
-                for(int k=0;k<64;k++)if(labels[k]==wanted) {
+                for(int k=0;k<labels.length;k++)if(labels[k]==wanted) {
                     float d=SquareSampler.lumDistance(samples[i].feature,templates[k].feature)/SquareSampler.N/SquareSampler.N;
                     if(d<best)best=d;
                 }
@@ -231,6 +231,34 @@ public class PieceClassifier {
             }
         }
         return costs;
+    }
+
+    public synchronized float[][] snapshotFeatures(Bitmap bmp, BoardDetector.Board board) {
+        SquareSampler.Sample[] samples=sampleAll(bmp,board);if(samples==null)return null;
+        float[][] result=new float[64][];for(int i=0;i<64;i++)result[i]=samples[i].feature.clone();return result;
+    }
+    public static PieceTemplates withObserved(PieceTemplates bank,char[][] screen,float[][] features) {
+        java.util.List<PieceTemplates.Entry> all=new java.util.ArrayList<>(bank.entries.subList(0,Math.min(320,bank.entries.size())));
+        if(features!=null)for(int i=0;i<64;i++)if(screen[i/8][i%8]!='.'){
+            boolean valid=true;for(float v:features[i])if(!Float.isFinite(v))valid=false;
+            if(valid)all.add(new PieceTemplates.Entry(screen[i/8][i%8],features[i]));
+        }
+        return new PieceTemplates(all);
+    }
+
+    /** Install an offline bank without assuming where any piece is currently standing. */
+    public synchronized void useTemplates(PieceTemplates bank, Side perspective) {
+        templates=new SquareSampler.Sample[bank.entries.size()];labels=new char[templates.length];
+        for(int i=0;i<templates.length;i++){
+            PieceTemplates.Entry e=bank.entries.get(i);labels[i]=e.piece;
+            templates[i]=new SquareSampler.Sample(e.feature.clone(),0,0,0,0,0);
+        }
+        previousFrame=null;previousLabels=null;bootstrapSide=perspective;trained=bank.complete();
+    }
+    public synchronized PieceTemplates exportTemplates() {
+        java.util.List<PieceTemplates.Entry> entries=new java.util.ArrayList<>();
+        if(trained)for(int i=0;i<labels.length;i++)if(labels[i]!='.')entries.add(new PieceTemplates.Entry(labels[i],templates[i].feature));
+        return new PieceTemplates(entries);
     }
 
     public synchronized void reset() {

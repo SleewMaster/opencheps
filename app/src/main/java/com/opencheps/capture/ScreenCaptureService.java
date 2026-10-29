@@ -41,6 +41,11 @@ import com.opencheps.vision.VisualMoveTracker;
 import com.opencheps.vision.FenBuilder;
 import com.opencheps.vision.MoveAnalyzer;
 import com.opencheps.vision.PieceClassifier;
+import com.opencheps.vision.PieceTemplates;
+import com.opencheps.vision.DiagramReader;
+import com.opencheps.vision.PositionSeed;
+import com.opencheps.camera.MoveAnnouncement;
+import com.opencheps.engine.CompletedAdvice;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -58,6 +63,12 @@ public class ScreenCaptureService extends Service {
     public static final String EXTRA_USER_SIDE   = "user_side";
     public static final String ACTION_STOP       = "com.opencheps.STOP";
     public static final String ACTION_SELECT_BOARD="com.opencheps.SELECT_BOARD";
+    public static final String ACTION_SETUP_POSITION="com.opencheps.SETUP_POSITION";
+    private final List<PieceTemplates> templateBanks=new ArrayList<>();
+    private final CompletedAdvice adviceCache=new CompletedAdvice();
+    private boolean setupRequested,setupOpen,autoSetupOff;
+    private char[][] startupCandidate;
+    private int startupRepeats;
     private Rect manualBoardScreen;
     private int uncertainFrames;
     private final Handler controls=new Handler(android.os.Looper.getMainLooper());
@@ -72,7 +83,6 @@ public class ScreenCaptureService extends Service {
 
     private static final int[]   ARROW_COLORS = { 0xFFB9F66E, 0xFF67D7FF, 0xFFFFC56B };
     private static final float[] ARROW_WIDTHS = { 18f, 13f, 10f };
-    private static final long    SAMPLE_PERIOD_MS = 500;
     private static final int     LOST_BOARD_THRESHOLD = 8;
 
     private MediaProjection projection;
@@ -122,6 +132,10 @@ public class ScreenCaptureService extends Service {
             stopSession(this);stopSelf(startId);
             return START_NOT_STICKY;
         }
+        if(ACTION_SETUP_POSITION.equals(intent.getAction())) {
+            if(worker!=null&&!destroyed)worker.post(()->{setupRequested=true;autoSetupOff=false;panelStatus("Покажи текущую доску…");});
+            return START_NOT_STICKY;
+        }
         if(ACTION_SELECT_BOARD.equals(intent.getAction())) {
             if(worker!=null&&!destroyed)worker.post(this::selectBoard);
             else {stopSession(this);stopSelf(startId);}
@@ -161,6 +175,7 @@ public class ScreenCaptureService extends Service {
 
         engine = new StockfishEngine();
         classifier = new PieceClassifier();
+        loadTemplateBanks();
 
         analysis.execute(() -> {
             try {
@@ -199,8 +214,8 @@ public class ScreenCaptureService extends Service {
                     @Override public void onStop() {if(!destroyed)stopSession(ScreenCaptureService.this);}
                     @Override public void onRecalibrate() {
                         worker.post(() -> {
-                            classifier.reset();resetGameState();OverlayService.clearAll();panelEval("");
-                            panelStatus("Новая партия · покажи начальную позицию");
+                            classifier.reset();resetGameState();autoSetupOff=false;startupCandidate=null;startupRepeats=0;adviceCache.clear();OverlayService.clearAll();panelEval("");
+                            panelStatus("Ищу текущую позицию");
                         });
                     }
                     @Override public void onSideChange(Side newSide) {
@@ -245,7 +260,7 @@ public class ScreenCaptureService extends Service {
                 manualBoardScreen=chosen==null?null:new Rect(chosen);
                 Prefs.saveBoard(this,manualBoardScreen,screenW,screenH);
                 classifier.reset();resetGameState();drainReader();
-                panelStatus(chosen==null?"Авто · покажи начальную позицию":"Рамка сохранена · покажи начальную позицию");
+                autoSetupOff=false;startupCandidate=null;startupRepeats=0;panelStatus(chosen==null?"Авто · покажи доску":"Рамка сохранена · покажи доску");
             });
         });
     }
@@ -254,7 +269,7 @@ public class ScreenCaptureService extends Service {
         @Override public void run() {
             if(destroyed)return;
             try {
-                if(paused||OverlayService.selectingBoard())drainReader();
+                if(paused||setupOpen||OverlayService.selectingBoard())drainReader();
                 else if(!refreshDisplaySize())sampleOnce();
             }catch(Throwable t){Log.e(TAG,"sample error",t);}
             if(!destroyed&&worker!=null)worker.postDelayed(this,220);
@@ -314,7 +329,7 @@ public class ScreenCaptureService extends Service {
             } else board=BoardDetector.locate(bmp);
 
             if (board == null) {
-                positionVerified=false;OverlayService.clearArrowsOnly();
+                invalidateSearch();startupCandidate=null;startupRepeats=0;OverlayService.clearArrowsOnly();
                 lostBoardCount++;
                 if (lostBoardCount < LOST_BOARD_THRESHOLD) {
                     if (lostBoardCount == 1) panelStatus("Ищу доску…");
@@ -329,13 +344,16 @@ public class ScreenCaptureService extends Service {
             Rect screenBounds = boardBoundsOnScreen(board);
             OverlayService.setBoardBounds(screenBounds);
 
+            if(setupRequested){setupRequested=false;openPosition(bmp,board,true);return;}
             if (!classifier.isTrained()) {
                 boolean ok = classifier.tryBootstrap(bmp, board);
                 if (!ok) {
-                    panelStatus("Покажи начальную позицию · или ▣ ДОСКА");
+                    if(!autoSetupOff&&openPosition(bmp,board,false))return;
+                    panelStatus("Позиция посреди партии · нажми ПОЗИЦИЯ");
                     OverlayService.setBoardFrameColor(0x66FFB300);
                     return;
                 }
+                rememberTheme();
                 Side detected = classifier.bootstrapSide();
                 OverlayService.setBoardFrameColor(0x6600C853);
                 positionVerified=true;
@@ -347,7 +365,7 @@ public class ScreenCaptureService extends Service {
                 if (observedStm == userSide) {
                     queryEngineAndRender(board, bmp);
                 } else {
-                    panelStatus(observedStm + "'s turn — waiting");
+                    panelStatus("Жду ход соперника");
                 }
                 return;
             }
@@ -371,19 +389,19 @@ public class ScreenCaptureService extends Service {
                 }
             }
             if(match==null) {
-                positionVerified=false;candidateGrid=null;candidateRepeats=0;
+                invalidateSearch();candidateGrid=null;candidateRepeats=0;
                 if(uncertainFrames>=3) {
                     PieceClassifier fresh=new PieceClassifier();
                     fresh.setAnnotationMask(OverlayService.captureMask(capToScreenX,capToScreenY));
                     if(fresh.tryBootstrap(bmp,board)) {
-                        classifier=fresh;resetGameState();confirmedGrid=startingGridFor(fresh.bootstrapSide());
+                        classifier=fresh;resetGameState();rememberTheme();adviceCache.clear();confirmedGrid=startingGridFor(fresh.bootstrapSide());
                         positionVerified=true;panelStatus("Новая партия распознана");
                         if(userSide==Side.WHITE)queryEngineAndRender(board,bmp);return;
                     }
                 }
                 if(++uncertainFrames<3)return;
                 OverlayService.clearArrowsOnly();currentArrows.clear();currentPvs.clear();
-                lastEngineFen="";panelEval("");panelStatus("Не вижу позицию · убери окна или нажми ▣ ДОСКА");
+                lastEngineFen="";panelEval("");panelStatus("Проверь доску · ПОЗИЦИЯ / ▣ ДОСКА");
                 return;
             }
             uncertainFrames=0;
@@ -399,8 +417,7 @@ public class ScreenCaptureService extends Service {
                 } else {OverlayService.clearArrowsOnly();panelStatus("Жду ход соперника");}
                 return;
             }
-            positionVerified=false;
-            if(analysisBusy)engine.cancelSearch();
+            invalidateSearch();
             OverlayService.clearArrowsOnly();panelEval("");
             if(!gridsEqual(grid,candidateGrid)) {candidateGrid=grid;candidateRepeats=1;panelStatus("Проверяю ход…");return;}
             candidateRepeats++;
@@ -427,6 +444,62 @@ public class ScreenCaptureService extends Service {
             if (img != null) try { img.close(); } catch (Exception ignored) {}
             busy = false;
         }
+    }
+
+    private void invalidateSearch(){
+        if(positionVerified){generation++;if(engine!=null)engine.cancelSearch();}
+        positionVerified=false;
+    }
+    private void loadTemplateBanks(){
+        try(java.io.InputStream in=new java.io.FileInputStream(new java.io.File(getFilesDir(),"screen-templates.txt"))){templateBanks.add(PieceTemplates.read(in));}catch(Exception ignored){}
+        try(java.io.InputStream in=getAssets().open("vision/neo-v1.txt")){templateBanks.add(PieceTemplates.read(in));}catch(Exception e){Log.w(TAG,"Built-in descriptors unavailable",e);}
+    }
+    private void rememberTheme(){
+        PieceTemplates bank=classifier.exportTemplates();if(!bank.complete())return;
+        templateBanks.add(0,bank);while(templateBanks.size()>3)templateBanks.remove(1);
+        // Persist only generic piece descriptors, never the screen or the current position.
+        try(java.io.OutputStream out=new java.io.FileOutputStream(new java.io.File(getFilesDir(),"screen-templates.txt"))){bank.write(out);}catch(Exception e){Log.w(TAG,"Could not save theme descriptors",e);}
+    }
+    private boolean openPosition(Bitmap bmp,BoardDetector.Board board,boolean force){
+        PieceClassifier bestClassifier=null;DiagramReader.Result best=null;float score=Float.POSITIVE_INFINITY;
+        List<PieceTemplates> banks=new ArrayList<>(templateBanks);
+        if(classifier.isTrained())banks.add(0,classifier.exportTemplates());
+        for(PieceTemplates bank:banks){
+            PieceClassifier reader=new PieceClassifier();reader.useTemplates(bank,userSide);
+            reader.setAnnotationMask(OverlayService.captureMask(capToScreenX,capToScreenY));
+            DiagramReader.Result result=DiagramReader.read(reader.labelCosts(bmp,board));if(result==null)continue;
+            float rank=result.error;for(boolean u:result.uncertain)if(u)rank+=.005f;
+            if(rank<score){score=rank;best=result;bestClassifier=reader;}
+        }
+        if(best==null){panelStatus("Нет шаблонов фигур · покажи начальную позицию один раз");return false;}
+        Side perspective=classifier.isTrained()?classifier.bootstrapSide():userSide;
+        char[][] canonical=perspective==Side.WHITE?best.screen:FenBuilder.flip(best.screen);
+        if(!FenBuilder.validate(canonical).ok){
+            Side alternate=ChessPosition.opposite(perspective);char[][] other=alternate==Side.WHITE?best.screen:FenBuilder.flip(best.screen);
+            if(FenBuilder.validate(other).ok){perspective=alternate;canonical=other;}
+        }
+        if(!force){
+            if(!FenBuilder.validate(canonical).ok||score>.10f){startupCandidate=null;startupRepeats=0;return false;}
+            if(!gridsEqual(best.screen,startupCandidate)){startupCandidate=ChessPosition.copy(best.screen);startupRepeats=1;panelStatus("Читаю текущую позицию…");return true;}
+            if(++startupRepeats<2)return true;
+        }
+        final PieceTemplates base=bestClassifier.exportTemplates();
+        final float[][] features=bestClassifier.snapshotFeatures(bmp,board);
+        setupOpen=true;invalidateSearch();generation++;engine.cancelSearch();lastEngineFen="";
+        currentPvs.clear();currentArrows.clear();OverlayService.clearAll();panelEval("");
+        OverlayService.editPosition(best.screen,best.uncertain,perspective,confirmedGrid==null?userSide:observedStm,seed->{
+            if(destroyed)return;
+            worker.post(()->{
+                setupOpen=false;autoSetupOff=true;startupCandidate=null;startupRepeats=0;
+                if(seed==null){panelStatus("Нажми ПОЗИЦИЯ, когда будешь готов");return;}
+                resetGameState();adviceCache.clear();
+                char[][] screen=seed.perspective==Side.WHITE?ChessPosition.copy(seed.position.board):FenBuilder.flip(seed.position.board);
+                classifier=new PieceClassifier();classifier.useTemplates(PieceClassifier.withObserved(base,screen,features),seed.perspective);
+                confirmedGrid=screen;observedStm=seed.position.turn;castlingRights=seed.position.rights;enPassantTarget=seed.position.ep;
+                halfmoveClock=seed.halfmove;fullmoveNumber=seed.fullmove;
+                positionVerified=false;panelStatus("Проверяю подтверждённую позицию…");drainReader();
+            });
+        });return true;
     }
 
     /** Track castling and en-passant strictly across confirmed board changes. */
@@ -480,22 +553,32 @@ public class ScreenCaptureService extends Service {
         if(fen.isEmpty())return;
         if(fen.equals(lastEngineFen)){repushCurrentArrows(board);return;}
         final int token=generation;
+        List<StockfishEngine.Pv> cached=adviceCache.get(fen);
+        if(cached!=null){lastEngineFen=fen;renderAnalysis(cached,fen,token,true);return;}
+        char[][] canonical=classifier.bootstrapSide()==Side.BLACK?FenBuilder.flip(confirmedGrid):confirmedGrid;
+        List<ChessPosition> legal=new ChessPosition(canonical,observedStm,castlingRights,enPassantTarget).successors();
+        if(legal.isEmpty()){lastEngineFen=fen;panelStatus(ChessPosition.inCheck(canonical,observedStm)?"Мат · партия завершена":"Пат · партия завершена");return;}
+        if(legal.size()==1){
+            List<StockfishEngine.Pv> forced=java.util.Collections.singletonList(new StockfishEngine.Pv(legal.get(0).move,0,false,0));
+            adviceCache.put(fen,forced);lastEngineFen=fen;renderAnalysis(forced,fen,token,true);panelStatus("Единственный допустимый ход");return;
+        }
         final int think=Prefs.thinkMs(getApplicationContext());
         final int multiPv=Prefs.multiPv(getApplicationContext());
         analysisBusy=true;lastEngineFen=fen;
         panelStatus("Считаю · "+think/1000f+" с");
         analysis.execute(() -> {
             try {
-                final List<StockfishEngine.Pv> pvs=engine.topMoves(fen,think,multiPv, partial -> {
-                    if(!destroyed)worker.post(() -> renderAnalysis(partial,fen,token,false));
-                });
+                // Only terminal bestmove may become an arrow. Search iterations stay internal.
+                final List<StockfishEngine.Pv> pvs=engine.topMoves(fen,think,multiPv);
                 if(destroyed)return;
                 worker.post(() -> {
                     analysisBusy=false;
                     if(token!=generation||paused||!positionVerified||observedStm!=userSide||candidateGrid!=null
                             ||!fen.equals(fenOf(confirmedGrid))) {lastEngineFen="";return;}
                     if(pvs.isEmpty()) {lastEngineFen="";panelStatus("Нет допустимых ходов");return;}
-                    renderAnalysis(pvs,fen,token,true);
+                    if(MoveAnnouncement.label(fen,pvs.get(0).uci)==null){lastEngineFen="";panelStatus("Перепроверяю допустимость хода");return;}
+                    adviceCache.put(fen,pvs);
+                    renderAnalysis(adviceCache.get(fen),fen,token,true);
                 });
             } catch(Exception e) {
                 Log.w(TAG,"analysis failed",e);
@@ -505,7 +588,7 @@ public class ScreenCaptureService extends Service {
     }
 
     private void renderAnalysis(List<StockfishEngine.Pv> pvs,String fen,int token,boolean complete) {
-        if(destroyed||paused||!positionVerified||token!=generation||observedStm!=userSide
+        if(!complete||destroyed||paused||!positionVerified||token!=generation||observedStm!=userSide
                 ||candidateGrid!=null||!fen.equals(fenOf(confirmedGrid))||pvs.isEmpty())return;
         currentPvs=new ArrayList<>(pvs);
         BoardDetector.Board latest=lastKnownBoard;
@@ -514,8 +597,9 @@ public class ScreenCaptureService extends Service {
         StockfishEngine.Pv best=pvs.get(0);
         String eval=best.mate ? (best.cp>0?"Мат за ":"Мат нам за ")+Math.abs(plyToMate(best.cp))
                 :String.format(java.util.Locale.US,"%+.2f",best.cp/100.0);
-        panelEval(formatUci(best.uci)+"  ·  "+eval);
-        panelStatus((complete?"Готово":"Уточняю")+" · глубина "+best.depth);
+        String name=MoveAnnouncement.label(fen,best.uci);
+        panelEval((name==null?formatUci(best.uci):name)+(best.depth>0?"\n"+eval:""));
+        panelStatus(best.depth>0?"Готово · глубина "+best.depth:"Ход готов");
     }
 
     private void repushCurrentArrows(BoardDetector.Board board) {
@@ -557,7 +641,7 @@ public class ScreenCaptureService extends Service {
 
     private String fenOf(char[][] grid) {
         if (grid == null) return "";
-        String f = FenBuilder.build(grid, classifier.bootstrapSide(), userSide,
+        String f = FenBuilder.build(grid, classifier.bootstrapSide(), observedStm,
                 castlingRights, enPassantTarget, halfmoveClock, fullmoveNumber);
         return f == null ? "" : f;
     }

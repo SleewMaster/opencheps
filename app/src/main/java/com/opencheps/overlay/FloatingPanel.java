@@ -67,6 +67,10 @@ public class FloatingPanel {
             if(com.opencheps.capture.ScreenCaptureService.isRunning)ctx.startService(new android.content.Intent(ctx,
                     com.opencheps.capture.ScreenCaptureService.class).setAction(com.opencheps.capture.ScreenCaptureService.ACTION_SELECT_BOARD));
         });
+        root.findViewById(R.id.panelPosition).setOnClickListener(v -> {
+            if(com.opencheps.capture.ScreenCaptureService.isRunning)ctx.startService(new android.content.Intent(ctx,
+                    com.opencheps.capture.ScreenCaptureService.class).setAction(com.opencheps.capture.ScreenCaptureService.ACTION_SETUP_POSITION));
+        });
         recalBtn.setOnClickListener(v -> {
             if (listener != null) listener.onRecalibrate();
         });

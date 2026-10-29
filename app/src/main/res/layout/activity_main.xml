@@ -30,7 +30,7 @@
                 </LinearLayout>
                 <TextView android:text="1,5 с · быстрый режим" android:textSize="16sp" android:textColor="#EAF2FF" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/thinkLabel" android:textStyle="bold" android:layout_marginTop="16dp" />
                 <SeekBar android:id="@+id/thinkBar" android:progressTint="#B9F66E" android:thumbTint="#B9F66E" android:layout_width="match_parent" android:layout_height="40dp" />
-                <TextView android:text="Подсказка появляется во время расчёта и уточняется." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                <TextView android:text="Экран: стрелка появляется после расчёта и остаётся до следующего хода." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" />
                 <TextView android:text="Одна стрелка · лучший ход" android:textSize="13sp" android:textColor="#D8E6F7" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/multiPvLabel" android:layout_marginTop="16dp" />
                 <SeekBar android:id="@+id/multiPvBar" android:progressTint="#67D7FF" android:thumbTint="#67D7FF" android:layout_width="match_parent" android:layout_height="36dp" />
             </LinearLayout>
@@ -40,7 +40,7 @@
                 <Button android:id="@+id/btnStop" android:text="Остановить" android:textAllCaps="false" android:textStyle="bold" android:textSize="14sp" android:textColor="#FFB4C1" android:backgroundTint="#2B2432" android:layout_width="match_parent" android:layout_height="56dp" android:enabled="false" />
             </LinearLayout>
             <TextView android:text="КАК НАЧАТЬ" android:textSize="11sp" android:textColor="#829AB8" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" />
-            <TextView android:text="Экран: разреши захват, покажи начальную позицию. Если доска не найдена, нажми ▣ ДОСКА.&#10;Камера: наведи на 2D-доску другого экрана, выставь четыре угла и нажми «Начать». Начни с начальной расстановки и закрепи телефон." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:lineSpacingExtra="4dp" />
+            <TextView android:text="Экран: разреши захват и покажи доску. Можно начать посреди партии: проверь распознанные фигуры и укажи, чей ход. Кнопка ПОЗИЦИЯ открывает исправление фигур и FEN. Если доска не найдена, нажми ▣ ДОСКА.&#10;Камера: наведи на 2D-доску другого экрана, выставь четыре угла и нажми «Начать». Начни с начальной расстановки и закрепи телефон." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:lineSpacingExtra="4dp" />
             <TextView android:text="OPEN CHEPS  /  BOT TRAINING" android:textSize="10sp" android:textColor="#49607F" android:layout_width="match_parent" android:layout_height="wrap_content" android:letterSpacing="0.1" android:layout_marginTop="24dp" android:layout_marginBottom="12dp" />
         </LinearLayout>
     </ScrollView>

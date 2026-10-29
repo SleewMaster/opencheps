@@ -138,6 +138,23 @@ public class OverlayService extends Service {
         });
     }
 
+    public static void editPosition(char[][] screen,boolean[] uncertain,com.opencheps.util.Side perspective,
+                                    com.opencheps.util.Side turn,java.util.function.Consumer<com.opencheps.vision.PositionSeed> apply) {
+        OverlayService s=instance;if(s==null){apply.accept(null);return;}
+        new android.os.Handler(s.getMainLooper()).post(() -> {
+            if(s.dismissed){apply.accept(null);return;}
+            s.closeSelector();if(s.panel!=null)s.panel.setVisible(false);
+            s.selector=new android.widget.FrameLayout(s);
+            PositionSetupView view=new PositionSetupView(s,screen,uncertain,perspective,turn,
+                    seed->{s.closeSelector();apply.accept(seed);},()->{s.closeSelector();apply.accept(null);});
+            s.selector.addView(view);s.selector.setFitsSystemWindows(true);
+            WindowManager.LayoutParams sp=new WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);
+            sp.gravity=Gravity.TOP|Gravity.START;sp.softInputMode=WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+            try{s.wm.addView(s.selector,sp);}catch(Exception e){s.closeSelector();apply.accept(null);}
+        });
+    }
+
     public static FloatingPanel panel() {
         return instance == null ? null : instance.panel;
     }

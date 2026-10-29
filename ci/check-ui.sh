@@ -234,3 +234,40 @@ assert any('Камера не разрешена.' in n.get('text','') for n in 
 b=next(n for n in nodes if n.get('text')=='Закрыть');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 print('CAMERA_UI_OK preview, corners, source persistence, close, permission denial')
 PYUI
+
+# Joining a game must not require the initial diagram. Exercise both review orientations.
+for side in w b; do
+ adb shell run-as com.opencheps.bottrainer rm -f files/screen-join-result.txt files/screen-join-ui-result.txt
+ adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.ScreenJoinTestActivity --es side "$side"
+ for attempt in $(seq 1 45); do
+  result=$(adb shell run-as com.opencheps.bottrainer cat files/screen-join-result.txt 2>/dev/null || true)
+  if [[ "$result" == SCREEN_JOIN_OK* ]]; then break; fi
+  if [[ "$result" == SCREEN_JOIN_FAIL* ]]; then adb logcat -d -s ScreenJoinTest:E; echo "$result"; exit 1; fi
+  sleep 1
+ done
+ [[ "$result" == "SCREEN_JOIN_OK 18" ]] || { echo "$result"; exit 1; }
+ echo "$result"
+ adb shell uiautomator dump /sdcard/join.xml
+ adb pull /sdcard/join.xml "ui-proof/join-$side.xml"
+ adb exec-out screencap -p > "ui-proof/join-$side.png"
+ python3 - <<'PYJOIN'
+import xml.etree.ElementTree as E,re,subprocess,time
+nodes=list(E.parse('/dev/stdin').iter('node')) if False else []
+xml=subprocess.check_output(['adb','shell','cat','/sdcard/join.xml']).decode()
+nodes=list(E.fromstring(xml).iter('node'))
+assert any(n.get('text')=='СТАРТ С ЭТОЙ ПОЗИЦИИ' for n in nodes)
+assert any('Ход белых'==n.get('text') for n in nodes)
+for attempt in range(7):
+ nodes=list(E.fromstring(subprocess.check_output(['adb','shell','uiautomator','dump','/sdcard/join-scroll.xml','>/dev/null','&&','cat','/sdcard/join-scroll.xml']).decode()).iter('node'))
+ button=next((n for n in nodes if n.get('text')=='Подтвердить позицию'),None)
+ if button is not None:
+  x1,y1,x2,y2=map(int,re.findall(r'\d+',button.attrib['bounds']))
+  if y2>y1:
+   subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True);break
+ subprocess.run(['adb','shell','input','swipe','360','1080','360','450','300'],check=True)
+else: raise AssertionError('review confirm unreachable')
+PYJOIN
+ result=$(adb shell run-as com.opencheps.bottrainer cat files/screen-join-ui-result.txt 2>/dev/null || true)
+ [[ "$result" == SCREEN_JOIN_UI_OK* ]] || { echo "Review not applied: $result"; exit 1; }
+ echo "$result"
+done

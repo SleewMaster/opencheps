@@ -4,7 +4,7 @@ set -euo pipefail
 mv app/src/main/jniLibs /tmp/opencheps-preview-jni
 mkdir -p app/src/main/jniLibs app/src/debug/java/com/opencheps/ui
 cat > app/src/debug/AndroidManifest.xml <<'XML'
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name="com.opencheps.ui.ArrowPreviewActivity" android:exported="true"/><activity android:name="com.opencheps.ui.OverlayTestActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraVisionTestActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraHintPreviewActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraSpeechTestActivity" android:exported="true"/><receiver android:name="com.opencheps.ui.OverlayStateReceiver" android:exported="true"/></application></manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name="com.opencheps.ui.ArrowPreviewActivity" android:exported="true"/><activity android:name="com.opencheps.ui.OverlayTestActivity" android:exported="true"/><activity android:name="com.opencheps.ui.ScreenJoinTestActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraVisionTestActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraHintPreviewActivity" android:exported="true"/><activity android:name="com.opencheps.ui.CameraSpeechTestActivity" android:exported="true"/><receiver android:name="com.opencheps.ui.OverlayStateReceiver" android:exported="true"/></application></manifest>
 XML
 cat > app/src/debug/java/com/opencheps/ui/ArrowPreviewActivity.java <<'JAVA'
 package com.opencheps.ui;
