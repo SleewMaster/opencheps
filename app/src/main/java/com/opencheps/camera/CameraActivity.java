@@ -30,6 +30,9 @@ public class CameraActivity extends AppCompatActivity {
     private CameraBoardView boardView;
     private CameraHintBoardView hintBoard;
     private ChessPosition verifiedPosition;
+    private PositionHistory.Snapshot verifiedSearch;
+    private final CompletedAdvice adviceCache=new CompletedAdvice();
+    private String activeSearchKey="";
     private TextView status,moveLabel;
     private Button apply,pause,orientation;
     private CheckBox voiceToggle;
@@ -141,7 +144,7 @@ public class CameraActivity extends AppCompatActivity {
         },ContextCompat.getMainExecutor(this));
     }
     private void reset(boolean editing){
-        invalidateAdvice();board=null;paused=false;if(pause!=null)pause.setText("Пауза");
+        invalidateAdvice();adviceCache.clear();board=null;paused=false;if(pause!=null)pause.setText("Пауза");
         announcement.reset();
         if(boardView!=null)boardView.setEditing(editing);
         if(apply!=null)apply.setText("Начать");
@@ -149,11 +152,11 @@ public class CameraActivity extends AppCompatActivity {
     }
     private void clearHintViews(){if(boardView!=null)boardView.clear();if(hintBoard!=null)hintBoard.clear();}
     private void stopSpeech(){if(speech!=null&&speech.stop())announcement.reset();}
-    private void invalidateAdvice(){generation++;verifiedFen="";verifiedPosition=null;displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();engine.cancelSearch();stopSpeech();updateRepeat();if(boardView!=null)clearHintViews();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
+    private void invalidateAdvice(){generation++;verifiedFen="";verifiedPosition=null;verifiedSearch=null;displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();activeSearchKey="";engine.cancelSearch();stopSpeech();updateRepeat();if(boardView!=null)clearHintViews();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
     private void suspendAdvice(boolean hide){
-        // Keep the last verified FEN's completed analysis cached, but prevent new engine
-        // results from being displayed until the position is visually verified again.
-        generation++;verifiedFen="";engine.cancelSearch();updateRepeat();
+        // A blurred frame must not restart a valid position's engine budget.
+        // Analysis may finish into the history-keyed cache; rendering waits for verification.
+        generation++;verifiedFen="";verifiedSearch=null;updateRepeat();
         if(hide){stopSpeech();clearHintViews();moveLabel.setText("Стабилизирую изображение…");}
         else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){stopSpeech();clearHintViews();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
     }
@@ -169,42 +172,45 @@ public class CameraActivity extends AppCompatActivity {
             CameraBoard.FrameResult observation=result;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
                 if(observation!=null&&observation.corners!=null)boardView.setTrackedCorners(observation.corners);
                 ChessPosition answer=observation==null?null:observation.position;
-                if(answer==null){
+                if(answer==null||observation.history==null){
                     boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
                     boolean hold=adviceGuard.failure(SystemClock.uptimeMillis(),!hardLoss,!hardLoss,observation!=null&&observation.pendingChange);
                     suspendAdvice(!hold);
                     status.setText(observation!=null&&!observation.problem.isEmpty()?observation.problem:"Жду чёткий кадр доски");return;
                 }
                 adviceGuard.verified(SystemClock.uptimeMillis());
-                verifiedPosition=answer;String fen=CameraBoard.fen(answer);
+                verifiedPosition=answer;verifiedSearch=observation.history;String fen=verifiedSearch.fen;
                 if(!fen.equals(verifiedFen)){
-                    generation++;engine.cancelSearch();verifiedFen=fen;
+                    generation++;if(!verifiedSearch.key.equals(activeSearchKey)){activeSearchKey="";engine.cancelSearch();}verifiedFen=fen;
                     if(!fen.equals(displayFen)){displayFen="";displayComplete=false;displayed=Collections.emptyList();stopSpeech();clearHintViews();moveLabel.setText("Подсказка появится здесь");}
                     updateRepeat();
                 }
                 if(answer.turn!=userSide){status.setText("Жду ход соперника · доска распознана");return;}
-                if(fen.equals(displayFen)&&!displayed.isEmpty()){
-                    boardView.setMoves(displayed,perspective);showMove(displayed.get(0),displayComplete);updateRepeat();
-                    if(displayComplete){announce(false);return;}
-                    // A dropped camera frame may have cancelled an unfinished search.
-                    // Reuse its arrow while finishing analysis; do not mistake a partial PV for a completed result.
-                }
+                List<StockfishEngine.Pv> cached=adviceCache.get(verifiedSearch.key);
+                if(cached!=null){render(cached,fen,generation,true);return;}
                 if(!engineReady){status.setText(engineFailed?"Stockfish недоступен — открой режим заново":"Запускаю Stockfish…");return;}
-                if(!analysisBusy)analyze(fen);
+                if(!analysisBusy)analyze(verifiedSearch);
             });
         });
     }};
-    private void analyze(String fen){
-        analysisBusy=true;final int token=generation;
+    private void analyze(PositionHistory.Snapshot search){
+        final String fen=search.fen;
+        analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
         int time=Prefs.thinkMs(this),count=Prefs.multiPv(this);status.setText("Считаю · "+time/1000f+" с");
         analysis.execute(()->{
-            try{List<StockfishEngine.Pv> moves=engine.topMoves(fen,time,count,partial->main.post(()->render(partial,fen,token,false)));
-                main.post(()->{analysisBusy=false;render(moves,fen,token,true);});
-            }catch(Exception e){main.post(()->{analysisBusy=false;if(token==generation&&!destroyed)status.setText("Ошибка анализа · повторяю");});}
+            try{List<StockfishEngine.Pv> moves=engine.topMoves(search,time,count);
+                main.post(()->{
+                    boolean completed=search.key.equals(activeSearchKey);analysisBusy=false;activeSearchKey="";
+                    if(!completed||destroyed||board!=session||moves.isEmpty()||MoveAnnouncement.label(fen,moves.get(0).uci)==null)return;
+                    adviceCache.put(search.key,moves);
+                    if(verifiedSearch!=null&&search.key.equals(verifiedSearch.key))render(adviceCache.get(search.key),fen,generation,true);
+                });
+            }catch(Exception e){main.post(()->{analysisBusy=false;activeSearchKey="";if(!destroyed&&verifiedSearch!=null&&search.key.equals(verifiedSearch.key))status.setText("Ошибка анализа · повторяю");});}
         });
     }
     private void render(List<StockfishEngine.Pv> moves,String fen,int token,boolean complete){
-        if(!active||destroyed||paused||token!=generation||!fen.equals(verifiedFen)||moves.isEmpty())return;
+        if(!complete||!active||destroyed||paused||token!=generation||!fen.equals(verifiedFen)||moves.isEmpty())return;
+        if(MoveAnnouncement.label(fen,moves.get(0).uci)==null){status.setText("Перепроверяю допустимость хода");return;}
         displayed=new ArrayList<>(moves);displayFen=fen;displayComplete=complete;boardView.setMoves(moves,perspective);
         showMove(moves.get(0),complete);updateRepeat();if(complete)announce(false);
     }
@@ -212,7 +218,7 @@ public class CameraActivity extends AppCompatActivity {
         String uci=best.uci;
         String score=best.mate?"мат "+Math.abs(100000-Math.abs(best.cp)):String.format(Locale.forLanguageTag("ru"),"%+.2f",best.cp/100f);
         String label=MoveAnnouncement.label(verifiedFen,uci);
-        moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+"\nОценка "+score);
+        moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+(best.depth>0?"\nОценка "+score:""));
         if(verifiedPosition!=null)hintBoard.show(verifiedPosition,uci,perspective);
         status.setText((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные"));
     }

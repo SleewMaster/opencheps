@@ -32,6 +32,7 @@ public class StockfishEngine {
     public interface Progress {void onUpdate(List<Pv> moves);}
     private final Object commands=new Object();
     private volatile boolean searching;
+    private long activeGameId;
     private Process proc;
     private BufferedWriter in;
     private BufferedReader out;
@@ -50,6 +51,7 @@ public class StockfishEngine {
         pb.redirectErrorStream(true);
         pb.directory(ctx.getFilesDir());
         proc = pb.start();
+        activeGameId=0;currentMultiPv=0;
 
         in = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
         out = new BufferedReader(new InputStreamReader(proc.getInputStream()));
@@ -60,6 +62,7 @@ public class StockfishEngine {
         send("setoption name Hash value 128");
         send("setoption name Move Overhead value 100");
         send("setoption name UCI_LimitStrength value false");
+        send("setoption name Skill Level value 20");
         send("setoption name Ponder value false");
         setMultiPv(1);
         send("isready");
@@ -80,10 +83,17 @@ public class StockfishEngine {
     }
 
     public synchronized List<Pv> topMoves(String fen,int time,int count,Progress progress) throws Exception {
+        return search("position fen "+fen,0,time,count,progress);
+    }
+    public synchronized List<Pv> topMoves(PositionHistory.Snapshot position,int time,int count)throws Exception {
+        return search(position.command,position.gameId,time,count,null);
+    }
+    private List<Pv> search(String positionCommand,long gameId,int time,int count,Progress progress)throws Exception {
         if(!ready)throw new IllegalStateException("engine not started");
+        if(gameId!=activeGameId){send("ucinewgame");send("isready");waitFor("readyok",6000);activeGameId=gameId;}
         count=Math.max(1,Math.min(3,count));setMultiPv(count);
         Pv[] latest=new Pv[count+1];
-        send("position fen "+fen);
+        send(positionCommand);
         searching=true;
         long lastPublish=System.nanoTime();
         String bestMove=null;

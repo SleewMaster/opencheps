@@ -8,7 +8,7 @@ public class CameraVisionTestActivity extends Activity {
     private static final String[] START={"rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"};
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
-        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
+        new Thread(()->{String message;try{message="CAMERA_VISION_OK "+check()+" SHAKE_OK "+checkShake()+" SNAP_OK "+checkCoarse()+" RECOVERY_OK "+checkRecovery();}catch(Throwable t){android.util.Log.e("CameraVisionTest","failure",t);message="CAMERA_VISION_FAIL "+t;}
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
     private int check(){int passed=0;
@@ -29,6 +29,7 @@ public class CameraVisionTestActivity extends Activity {
                     save(square,"camera-failed.png");save(shot,"camera-photo.png");
                     throw new AssertionError("theme="+theme+" flipped="+flipped+" angled="+angled+" ply="+ply+" accepted="+(accepted==null?null:accepted.move)+diagnose(tracker,square,flipped));
                 }
+                if(tracker.historySnapshot().plies!=ply||tracker.historySnapshot().fullmove!=(ply==2?2:1))throw new AssertionError("camera move history lost at ply "+ply);
                 raw.recycle();shot.recycle();square.recycle();passed++;
             }
             Bitmap covered=Bitmap.createBitmap(640,640,Bitmap.Config.ARGB_8888);covered.eraseColor(0xff333333);
@@ -84,6 +85,37 @@ public class CameraVisionTestActivity extends Activity {
             CameraBoard.FrameResult result=session.readFrame(shot,rough);result=session.readFrame(shot,rough);
             if(result.position==null||!java.util.Arrays.deepEquals(result.position.board,e5))throw new AssertionError("reframe lost current game theme="+theme+" reason="+result.problem);
             raw.recycle();shot.recycle();
+        }return passed;
+    }
+    private int checkRecovery(){int passed=0;
+        for(int theme=0;theme<THEMES.length;theme++)for(boolean flipped:new boolean[]{false,true}){
+            float[] anchor={120,80,660,140,700,720,60,760},shifted=anchor.clone();
+            for(int i=0;i<4;i++){shifted[2*i]+=48;shifted[2*i+1]+=32;}
+            char[][] start=new char[8][];for(int r=0;r<8;r++)start[r]=START[r].toCharArray();
+            char[][] e4=ChessPosition.copy(start);e4[6][4]='.';e4[4][4]='P';
+            char[][] e5=ChessPosition.copy(e4);e5[1][4]='.';e5[3][4]='p';
+            char[][] nf3=ChessPosition.copy(e5);nf3[7][6]='.';nf3[5][5]='N';
+            CameraBoard session=new CameraBoard(flipped?Side.BLACK:Side.WHITE);
+            for(char[][] expected:new char[][][]{start,e4,e5}){
+                Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(expected):expected,THEMES[theme]),shot=photograph(raw,anchor,true);
+                CameraBoard.FrameResult result=session.readFrame(shot,anchor);result=session.readFrame(shot,anchor);
+                if(result.position==null)throw new AssertionError("recovery fixture calibration "+theme+" "+result.problem);
+                raw.recycle();shot.recycle();
+            }
+            String saved=session.historySnapshot().command;
+            Bitmap blackout=Bitmap.createBitmap(800,840,Bitmap.Config.ARGB_8888);blackout.eraseColor(0xff121820);
+            for(int i=0;i<4;i++)if(session.readFrame(blackout,anchor).position!=null)throw new AssertionError("lost board accepted");
+            blackout.recycle();
+            for(char[][] expected:new char[][][]{e5,nf3}){
+                Bitmap raw=NativeVisionCheck.render(640,640,0,flipped?FenBuilder.flip(expected):expected,THEMES[theme]),shot=photograph(raw,shifted,true);
+                CameraBoard.FrameResult result=null;
+                for(int i=0;i<10;i++){result=session.readFrame(shot,anchor);if(result.position!=null)break;}
+                if(result.position==null||!java.util.Arrays.deepEquals(result.position.board,expected)){save(shot,"camera-photo.png");throw new AssertionError("automatic recovery theme="+theme+" flipped="+flipped+" reason="+result.problem);}
+                for(int i=0;i<4;i++)if(Math.hypot(result.corners[2*i]-shifted[2*i],result.corners[2*i+1]-shifted[2*i+1])>4)throw new AssertionError("recovered grid misaligned");
+                if(expected==e5&&!saved.equals(result.history.command))throw new AssertionError("recovery erased game history");
+                if(expected==nf3&&(result.history.plies!=3||result.history.halfmove!=1||!result.history.command.endsWith(" moves e2e4 e7e5 g1f3")))throw new AssertionError("post-recovery move missing");
+                raw.recycle();shot.recycle();
+            }passed++;
         }return passed;
     }
     private float[] shaken(float[] corners,int step){

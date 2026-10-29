@@ -46,6 +46,7 @@ import com.opencheps.vision.DiagramReader;
 import com.opencheps.vision.PositionSeed;
 import com.opencheps.camera.MoveAnnouncement;
 import com.opencheps.engine.CompletedAdvice;
+import com.opencheps.engine.PositionHistory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -66,6 +67,7 @@ public class ScreenCaptureService extends Service {
     public static final String ACTION_SETUP_POSITION="com.opencheps.SETUP_POSITION";
     private final List<PieceTemplates> templateBanks=new ArrayList<>();
     private final CompletedAdvice adviceCache=new CompletedAdvice();
+    private final PositionHistory history=new PositionHistory();
     private boolean setupRequested,setupOpen,autoSetupOff;
     private char[][] startupCandidate;
     private int startupRepeats;
@@ -232,6 +234,7 @@ public class ScreenCaptureService extends Service {
     }
 
     private void resetGameState() {
+        history.clear();
         generation++;
         if(engine!=null)engine.cancelSearch();
         positionVerified=false;
@@ -330,6 +333,7 @@ public class ScreenCaptureService extends Service {
 
             if (board == null) {
                 invalidateSearch();startupCandidate=null;startupRepeats=0;OverlayService.clearArrowsOnly();
+                currentArrows.clear();currentPvs.clear();lastEngineFen="";panelEval("");
                 lostBoardCount++;
                 if (lostBoardCount < LOST_BOARD_THRESHOLD) {
                     if (lostBoardCount == 1) panelStatus("Ищу доску…");
@@ -359,6 +363,7 @@ public class ScreenCaptureService extends Service {
                 positionVerified=true;
                 confirmedGrid = startingGridFor(detected);
                 observedStm = Side.WHITE;
+                history.reset(fenOf(confirmedGrid));
                 candidateGrid = null;
                 candidateRepeats = 0;
                 panelStatus("Готов · твоя сторона: " + userSide);
@@ -395,7 +400,7 @@ public class ScreenCaptureService extends Service {
                     fresh.setAnnotationMask(OverlayService.captureMask(capToScreenX,capToScreenY));
                     if(fresh.tryBootstrap(bmp,board)) {
                         classifier=fresh;resetGameState();rememberTheme();adviceCache.clear();confirmedGrid=startingGridFor(fresh.bootstrapSide());
-                        positionVerified=true;panelStatus("Новая партия распознана");
+                        history.reset(fenOf(confirmedGrid));positionVerified=true;panelStatus("Новая партия распознана");
                         if(userSide==Side.WHITE)queryEngineAndRender(board,bmp);return;
                     }
                 }
@@ -422,12 +427,9 @@ public class ScreenCaptureService extends Service {
             if(!gridsEqual(grid,candidateGrid)) {candidateGrid=grid;candidateRepeats=1;panelStatus("Проверяю ход…");return;}
             candidateRepeats++;
             if(candidateRepeats<2)return;
-            if(match.plies==2) {
-                char[][] middle=classifier.bootstrapSide()==Side.BLACK
-                        ? FenBuilder.flip(match.intermediate.board) : match.intermediate.board;
-                updatePositionMetadata(confirmedGrid,middle,MoveAnalyzer.analyze(canonical,match.intermediate.board));
-                updatePositionMetadata(middle,grid,MoveAnalyzer.analyze(match.intermediate.board,match.position.board));
-            } else updatePositionMetadata(confirmedGrid,grid,MoveAnalyzer.analyze(canonical,match.position.board));
+            if(match.plies==2)history.advance(match.intermediate,match.position);else history.advance(match.position);
+            PositionHistory.Snapshot confirmedHistory=history.snapshot();
+            halfmoveClock=confirmedHistory.halfmove;fullmoveNumber=confirmedHistory.fullmove;
             generation++;
             positionVerified=true;
             confirmedGrid=grid;observedStm=match.position.turn;
@@ -496,55 +498,10 @@ public class ScreenCaptureService extends Service {
                 char[][] screen=seed.perspective==Side.WHITE?ChessPosition.copy(seed.position.board):FenBuilder.flip(seed.position.board);
                 classifier=new PieceClassifier();classifier.useTemplates(PieceClassifier.withObserved(base,screen,features),seed.perspective);
                 confirmedGrid=screen;observedStm=seed.position.turn;castlingRights=seed.position.rights;enPassantTarget=seed.position.ep;
-                halfmoveClock=seed.halfmove;fullmoveNumber=seed.fullmove;
+                halfmoveClock=seed.halfmove;fullmoveNumber=seed.fullmove;history.reset(seed.fen());
                 positionVerified=false;panelStatus("Проверяю подтверждённую позицию…");drainReader();
             });
         });return true;
-    }
-
-    /** Track castling and en-passant strictly across confirmed board changes. */
-    private void updatePositionMetadata(char[][] oldScreen, char[][] newScreen,
-                                        MoveAnalyzer.Result move) {
-        char[][] prev = classifier.bootstrapSide() == Side.BLACK
-                ? FenBuilder.flip(oldScreen) : oldScreen;
-        char[][] next = classifier.bootstrapSide() == Side.BLACK
-                ? FenBuilder.flip(newScreen) : newScreen;
-        StringBuilder rights = new StringBuilder();
-        if (castlingRights.contains("K") && prev[7][4] == 'K' && next[7][4] == 'K'
-                && prev[7][7] == 'R' && next[7][7] == 'R') rights.append('K');
-        if (castlingRights.contains("Q") && prev[7][4] == 'K' && next[7][4] == 'K'
-                && prev[7][0] == 'R' && next[7][0] == 'R') rights.append('Q');
-        if (castlingRights.contains("k") && prev[0][4] == 'k' && next[0][4] == 'k'
-                && prev[0][7] == 'r' && next[0][7] == 'r') rights.append('k');
-        if (castlingRights.contains("q") && prev[0][4] == 'k' && next[0][4] == 'k'
-                && prev[0][0] == 'r' && next[0][0] == 'r') rights.append('q');
-        castlingRights = rights.length() == 0 ? "-" : rights.toString();
-
-        enPassantTarget = "-";
-        boolean pawnMoved = false, captured = false;
-        char pawn = move.mover == Side.WHITE ? 'P' : 'p';
-        for (int r = 0; r < 8; r++) {
-            for (int f = 0; f < 8; f++) {
-                char before = prev[r][f], after = next[r][f];
-                if (before == pawn && after != pawn) pawnMoved = true;
-                if (before != '.' && before != after
-                        && Character.isUpperCase(before) != (move.mover == Side.WHITE)) {
-                    captured = true;
-                }
-            }
-        }
-        int from = move.mover == Side.WHITE ? 6 : 1;
-        int to = move.mover == Side.WHITE ? 4 : 3;
-        for (int f = 0; f < 8; f++) {
-            if (prev[from][f] == pawn && next[from][f] == '.'
-                    && prev[to][f] == '.' && next[to][f] == pawn) {
-                enPassantTarget = "" + (char)('a' + f)
-                        + (move.mover == Side.WHITE ? "3" : "6");
-                break;
-            }
-        }
-        halfmoveClock = pawnMoved || captured ? 0 : halfmoveClock + 1;
-        if (move.mover == Side.BLACK) fullmoveNumber++;
     }
 
     private void queryEngineAndRender(BoardDetector.Board board, Bitmap currentBitmap) {
@@ -553,14 +510,16 @@ public class ScreenCaptureService extends Service {
         if(fen.isEmpty())return;
         if(fen.equals(lastEngineFen)){repushCurrentArrows(board);return;}
         final int token=generation;
-        List<StockfishEngine.Pv> cached=adviceCache.get(fen);
+        final PositionHistory.Snapshot search=history.snapshot();
+        if(!fen.equals(search.fen)){panelStatus("История не совпала · нажми ПОЗИЦИЯ");return;}
+        List<StockfishEngine.Pv> cached=adviceCache.get(search.key);
         if(cached!=null){lastEngineFen=fen;renderAnalysis(cached,fen,token,true);return;}
         char[][] canonical=classifier.bootstrapSide()==Side.BLACK?FenBuilder.flip(confirmedGrid):confirmedGrid;
         List<ChessPosition> legal=new ChessPosition(canonical,observedStm,castlingRights,enPassantTarget).successors();
         if(legal.isEmpty()){lastEngineFen=fen;panelStatus(ChessPosition.inCheck(canonical,observedStm)?"Мат · партия завершена":"Пат · партия завершена");return;}
         if(legal.size()==1){
             List<StockfishEngine.Pv> forced=java.util.Collections.singletonList(new StockfishEngine.Pv(legal.get(0).move,0,false,0));
-            adviceCache.put(fen,forced);lastEngineFen=fen;renderAnalysis(forced,fen,token,true);panelStatus("Единственный допустимый ход");return;
+            adviceCache.put(search.key,forced);lastEngineFen=fen;renderAnalysis(forced,fen,token,true);panelStatus("Единственный допустимый ход");return;
         }
         final int think=Prefs.thinkMs(getApplicationContext());
         final int multiPv=Prefs.multiPv(getApplicationContext());
@@ -569,7 +528,7 @@ public class ScreenCaptureService extends Service {
         analysis.execute(() -> {
             try {
                 // Only terminal bestmove may become an arrow. Search iterations stay internal.
-                final List<StockfishEngine.Pv> pvs=engine.topMoves(fen,think,multiPv);
+                final List<StockfishEngine.Pv> pvs=engine.topMoves(search,think,multiPv);
                 if(destroyed)return;
                 worker.post(() -> {
                     analysisBusy=false;
@@ -577,8 +536,8 @@ public class ScreenCaptureService extends Service {
                             ||!fen.equals(fenOf(confirmedGrid))) {lastEngineFen="";return;}
                     if(pvs.isEmpty()) {lastEngineFen="";panelStatus("Нет допустимых ходов");return;}
                     if(MoveAnnouncement.label(fen,pvs.get(0).uci)==null){lastEngineFen="";panelStatus("Перепроверяю допустимость хода");return;}
-                    adviceCache.put(fen,pvs);
-                    renderAnalysis(adviceCache.get(fen),fen,token,true);
+                    adviceCache.put(search.key,pvs);
+                    renderAnalysis(adviceCache.get(search.key),fen,token,true);
                 });
             } catch(Exception e) {
                 Log.w(TAG,"analysis failed",e);

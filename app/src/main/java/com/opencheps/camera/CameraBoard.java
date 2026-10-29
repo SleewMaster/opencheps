@@ -2,6 +2,7 @@ package com.opencheps.camera;
 
 import android.graphics.*;
 import com.opencheps.util.Side;
+import com.opencheps.engine.PositionHistory;
 import com.opencheps.vision.*;
 
 /** Each instance belongs to one calibration and is used only on the vision executor. */
@@ -10,6 +11,9 @@ public final class CameraBoard {
     private final PieceClassifier classifier=new PieceClassifier();
     private final FrameConsensus consensus=new FrameConsensus();
     private ChessPosition position;
+    private final PositionHistory history=new PositionHistory();
+    private int lostFrames,recoveryFailures;
+    private boolean recovering;
     private float confidenceScale=1;
     private BoardMotionTracker motion=new BoardMotionTracker();
     private boolean gridLocked;
@@ -28,8 +32,10 @@ public final class CameraBoard {
         public final float[] corners;
         public final boolean tracked,readable,pendingChange;
         public final String problem;
+        public final PositionHistory.Snapshot history;
         FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending){this(p,c,tracked,readable,pending,"");}
-        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem){position=p;corners=c;this.tracked=tracked;this.readable=readable;pendingChange=pending;this.problem=problem;}
+        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem){this(p,c,tracked,readable,pending,problem,null);}
+        FrameResult(ChessPosition p,float[] c,boolean tracked,boolean readable,boolean pending,String problem,PositionHistory.Snapshot history){position=p;corners=c;this.tracked=tracked;this.readable=readable;pendingChange=pending;this.problem=problem;this.history=history;}
     }
     /** Refit geometry without discarding the learned pieces and current legal position. */
     public void requestReframe(){reframe=true;}
@@ -42,7 +48,7 @@ public final class CameraBoard {
         BoardMotionTracker.Frame gray=BoardMotionTracker.Frame.fromArgb(cameraPixels,w,h,480);
         float sx=gray.width/(float)w,sy=gray.height/(float)h;
         float[] scaled=corners.clone();for(int i=0;i<4;i++){scaled[i*2]*=sx;scaled[i*2+1]*=sy;}
-        if(reframe){reframe=false;gridLocked=false;motion=new BoardMotionTracker();consensus.accept(null);}
+        if(reframe){reframe=false;recoverGeometry();}
         if(!gridLocked){
             float[] snapped=BoardGridLocator.locate(gray,scaled);
             if(snapped==null)snapped=BoardGridLocator.locate(gray,new float[]{2,2,gray.width-3,2,gray.width-3,gray.height-3,2,gray.height-3});
@@ -50,15 +56,23 @@ public final class CameraBoard {
             scaled=snapped;
         }
         BoardMotionTracker.Result tracked=motion.update(gray,scaled);
-        if(tracked==null){consensus.accept(null);return new FrameResult(null,null,false,false,false,"Потерял сетку доски. Верни её в кадр или нажми «Углы заново» — партия сохранится.");}
+        if(tracked==null){consensus.accept(null);if(++lostFrames>=3)recoverGeometry();return new FrameResult(null,null,false,false,false,"Ищу доску заново · партия сохранена. Покажи все клетки.");}
+        lostFrames=0;
         gridLocked=true;
         float[] real=tracked.corners.clone();for(int i=0;i<4;i++){real[i*2]/=sx;real[i*2+1]/=sy;}
         if(!tracked.readable()){consensus.accept(null);return new FrameResult(null,real,true,false,false,"Сетка найдена, но кадр смазан. Коснись изображения для фокуса.");}
         Bitmap square=rectify(frame,real);
         if(square==null){consensus.accept(null);return new FrameResult(null,null,false,false,false);}
-        try {ChessPosition p=read(square);return new FrameResult(p,real,true,!covered,pendingChange,problem);}
+        try {
+            ChessPosition p=read(square);
+            if(p!=null){recovering=false;recoveryFailures=0;}
+            else if(recovering&&++recoveryFailures>=3)recoverGeometry();
+            return new FrameResult(p,real,true,!covered,pendingChange,problem,p==null?null:history.snapshot());
+        }
         finally {square.recycle();}
     }
+    private void recoverGeometry(){gridLocked=false;motion=new BoardMotionTracker();lostFrames=0;recoveryFailures=0;recovering=true;consensus.accept(null);}
+    public PositionHistory.Snapshot historySnapshot(){return history.snapshot();}
     public static Bitmap rectify(Bitmap source,float[] corners) {
         if(!CameraGeometry.valid(corners,source.getWidth(),source.getHeight()))return null;
         Matrix m=new Matrix();
@@ -86,6 +100,7 @@ public final class CameraBoard {
             background=new CameraBackground(boardPixels,SIZE,SIZE);
             char[][] start={"rnbqkbnr".toCharArray(),"pppppppp".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"PPPPPPPP".toCharArray(),"RNBQKBNR".toCharArray()};
             position=new ChessPosition(start,Side.WHITE,"KQkq","-");
+            history.reset(fen(position));
         }
         rectified.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);
         if(background!=null&&!background.visible(boardPixels,SIZE,SIZE)){covered=true;consensus.accept(null);problem="Доска частично закрыта или появился блик. Покажи все клетки.";return null;}
@@ -100,6 +115,8 @@ public final class CameraBoard {
         pendingChange=match.plies>0;
         String key=fen(match.position);
         if(!consensus.accept(key)){problem="Доска найдена · подтверждаю положение фигур";return null;}
+        if(match.plies==2)history.advance(match.intermediate,match.position);
+        else if(match.plies==1)history.advance(match.position);
         position=match.position;
         classifier.commitConfirmed(perspective==Side.BLACK?FenBuilder.flip(position.board):position.board,rectified,bounds);
         return position;

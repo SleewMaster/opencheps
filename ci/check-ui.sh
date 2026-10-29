@@ -225,7 +225,7 @@ for attempt in $(seq 1 180); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 # Both production arrow views must render a named legal move in either orientation.

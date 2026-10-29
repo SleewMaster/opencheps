@@ -1,5 +1,9 @@
 package com.opencheps;
 import com.opencheps.engine.StockfishEngine;
+import com.opencheps.engine.PositionHistory;
+import com.opencheps.vision.PositionSeed;
+import com.opencheps.vision.ChessPosition;
+import com.opencheps.util.Side;
 import org.junit.Test;import static org.junit.Assert.*;
 import java.io.*;import java.lang.reflect.Field;import java.util.*;
 public class EngineStreamTest {
@@ -19,4 +23,20 @@ public class EngineStreamTest {
   assertEquals("e2e4",partial.get(0).uci);assertEquals(14,partial.get(0).depth);assertEquals("e2e4",finalMoves.get(0).uci);assertTrue(commands.toString().contains("stop\n"));
  }
  @Test public void noLegalMoveGivesEmptyResult()throws Exception{assertTrue(engine(new StringReader("bestmove (none)\n"),new StringWriter()).topMoves("fake",1500,1).isEmpty());}
+ @Test public void sendsConfirmedMovesAndResetsOnlyBetweenGames()throws Exception{
+  String start="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  PositionHistory h=new PositionHistory();h.reset(start);
+  for(String move:new String[]{"g1f3","g8f6","f3g1","f6g8"}){
+   ChessPosition p=PositionSeed.parse(h.snapshot().fen,Side.WHITE).position;
+   for(ChessPosition n:p.successors())if(n.move.equals(move)){h.advance(n);break;}
+  }
+  StringWriter commands=new StringWriter();
+  StockfishEngine e=engine(new StringReader("readyok\ninfo depth 15 score cp 20 pv e2e4\nbestmove e2e4\nbestmove d2d4\nreadyok\nbestmove e2e4\n"),commands);
+  assertEquals("e2e4",e.topMoves(h.snapshot(),1500,1).get(0).uci);
+  assertTrue(commands.toString().contains("position fen "+start+" moves g1f3 g8f6 f3g1 f6g8\n"));
+  e.topMoves(h.snapshot(),1500,1);
+  assertEquals(1,commands.toString().split("ucinewgame",-1).length-1);
+  h.reset(start);e.topMoves(h.snapshot(),1500,1);
+  assertEquals(2,commands.toString().split("ucinewgame",-1).length-1);
+ }
 }
