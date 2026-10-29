@@ -22,7 +22,7 @@ public final class PositionSetupView extends ScrollView {
                              java.util.function.Consumer<PositionSeed> apply,Runnable cancel){
         super(context);this.screen=ChessPosition.copy(screen);this.uncertain=uncertain.clone();this.perspective=perspective;this.turn=turn;
         setBackgroundColor(0xff0b121e);setFillViewport(true);
-        LinearLayout body=new LinearLayout(context);body.setOrientation(1);body.setPadding(dp(18),dp(12),dp(18),dp(24));addView(body);
+        LinearLayout body=new LinearLayout(context);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(12),dp(18),dp(24));addView(body);
         text(body,"СТАРТ С ЭТОЙ ПОЗИЦИИ",20,0xffeaf2ff);
         text(body,"Проверь фигуры. Нажми клетку, чтобы исправить. Жёлтым отмечено сомнение распознавания.",13,0xffa4b7d1);
         board=new BoardEditor(context);body.addView(board,new LinearLayout.LayoutParams(-1,dp(280)));
