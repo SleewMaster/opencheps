@@ -42,9 +42,11 @@ public final class NativeVisionCheck {
    });
   }catch(Throwable t){fail(activity,result,t);}
  }
- static Bitmap render(int w,int h,float top,char[][] grid,int[] colors){
+ static Bitmap render(int w,int h,float top,char[][] grid,int[] colors){return render(w,h,top,grid,colors,null);}
+ static Bitmap render(int w,int h,float top,char[][] grid,int[] colors,int[] highlights){
   Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(bmp);c.drawColor(0xff0b121e);Paint p=new Paint(3);float cell=w/8f;
   for(int r=0;r<8;r++)for(int f=0;f<8;f++){p.setColor(colors[(r+f)&1]);c.drawRect(f*cell,top+r*cell,(f+1)*cell,top+(r+1)*cell,p);}
+  if(highlights!=null){p.setColor(0xffffff60);for(int cellIndex:highlights){int r=cellIndex/8,f=cellIndex%8;c.drawRect(f*cell,top+r*cell,(f+1)*cell,top+(r+1)*cell,p);}}
   String keys="KQRBNPkqrbnp",glyphs="♔♕♖♗♘♙♚♛♜♝♞♟";p.setTypeface(Typeface.DEFAULT);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(cell*.74f);
   for(int r=0;r<8;r++)for(int f=0;f<8;f++){int i=keys.indexOf(grid[r][f]);if(i<0)continue;p.setColor(i<6?0xfff8fafc:0xff151c24);c.drawText(glyphs.substring(i,i+1),(f+.5f)*cell,top+(r+.78f)*cell,p);}
   return bmp;

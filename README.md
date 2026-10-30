@@ -1,3 +1,11 @@
+## 0.13.0: подсветка последнего хода не блокирует камеру
+
+Исправлена проверка перекрытия при подключении посреди партии: жёлтые клетки и красный шах в первом кадре больше не становятся постоянным эталоном фона. Исчезновение старой подсветки и появление новой не считается рукой перед доской. Перекрытия по-прежнему проверяются, допуск не увеличен.
+
+При чтении тёмных фигур по сохранённым шаблонам камера совмещает обычные и расширенные образцы: расширение тонкого контура больше не используется как единственный признак заполненных тёмных фигур. Сомнительные клетки необходимо проверить в редакторе позиции. Сообщения отличают поиск доски, неподтверждённый кадр и проверку фигур.
+
+Добавлены четыре проверки смены подсветки/перекрытия и Android-регрессия подключения на подсвеченном ходе с восемью последующими полуходами, дрожанием и временным перекрытием. Реальный присланный кадр анализировался локально и не включён в репозиторий или APK. Проверки на эмуляторе не заменяют полевую проверку телефоном.
+
 ## Исправление камеры после первого хода
 
 Если оптическое слежение теряет опорные точки, сетка теперь ищется заново в том же кадре. Для чтения фигур больше не требуется успешное сопоставление со старой картинкой. Чёткая сетка, видимый фон клеток и два совпадающих законных чтения остаются обязательными. История партии сохраняется.
@@ -22,9 +30,9 @@
 
 ---
 
-# OpenCheps Bot 0.12.0
+# OpenCheps Bot 0.13.0
 
-**[Скачать APK 0.12.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.12.0/OpenCheps_Bot_0.12.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.12.0)**
+**[Скачать APK 0.13.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.13.0/OpenCheps_Bot_0.13.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.13.0)**
 
 Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана, в том числе посреди партии**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
 
@@ -44,7 +52,7 @@ To join a current position, the offline piece bank supplies a diagram for full-s
 
 The selected quadrilateral is rectified to a 640 × 640 board before template recognition. Legal positions, including two missed plies, are considered; two clear matching observations are required to accept a position. Uncertain frames hide advice. Hints are projected back into the camera preview using the same four corners. Preview sampling excludes the app's own drawn hints.
 
-Camera hand-shake stabilization registers grid intersections against a fixed reference using robust projective fitting. The same tracked corners rectify frames and draw hints. Small translations, rotation, zoom and perspective changes are followed; after three failed tracking frames the grid is searched again without discarding the game. Reframing remains available when automatic recovery fails. Severe blur or an occluded board cannot be recognised safely. Two clear matching observations may bridge one dropped frame. New engine output is blocked during uncertainty; one soft failure may keep a verified arrow for at most 450 ms, while detected move candidates or lost geometry hide it immediately. Completed advice can be reused only after its FEN is verified again. Sampling interval: 220 ms, with actual latency dependent on device speed.
+Camera hand-shake stabilization registers grid intersections against a fixed reference using robust projective fitting. The same tracked corners rectify frames and draw hints. Small translations, rotation, zoom and perspective changes are followed; when optical registration fails the grid is searched again in the same frame without discarding the game. Reframing remains available when automatic recovery fails. Severe blur or an occluded board cannot be recognised safely. Two clear matching observations may bridge one dropped frame. New engine output is blocked during uncertainty; one soft failure may keep a verified arrow for at most 450 ms, while detected move candidates or lost geometry hide it immediately. Completed advice can be reused only after its FEN is verified again. Sampling interval: 220 ms, with actual latency dependent on device speed.
 
 **Camera voice:** enable «Озвучивать ход» for Russian spoken moves, for example «Пешка с е два на е четыре». Only completed, currently verified, legal recommendations are spoken; repeated camera frames do not repeat the same announcement. «Повторить» repeats the current verified hint. Speech stops on pause, close, a detected move or loss of the board. A Russian offline voice must be installed in Android text-to-speech settings; missing speech support leaves arrows working. No network voices are selected. The voice preference is saved. Only terminal bestmove results are displayed. A blurred frame lets the current search finish into a history-keyed cache; no new advice is displayed until that exact position is verified again. Explicit pause, close or a confirmed different position cancels the search.
 

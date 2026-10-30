@@ -161,12 +161,12 @@ public class CameraActivity extends AppCompatActivity {
     private void clearHintViews(){if(boardView!=null)boardView.clear();}
     private void stopSpeech(){if(speech!=null&&speech.stop())announcement.reset();}
     private void invalidateAdvice(){generation++;verifiedFen="";verifiedPosition=null;verifiedSearch=null;displayFen="";displayComplete=false;displayed=Collections.emptyList();adviceGuard.reset();activeSearchKey="";engine.cancelSearch();stopSpeech();updateRepeat();if(boardView!=null)clearHintViews();if(moveLabel!=null)moveLabel.setText("Подсказка появится здесь");}
-    private void suspendAdvice(boolean hide){
+    private void suspendAdvice(boolean hide,String message){
         // A blurred frame must not restart a valid position's engine budget.
         // Analysis may finish into the history-keyed cache; rendering waits for verification.
         generation++;verifiedFen="";verifiedSearch=null;updateRepeat();
-        if(hide){stopSpeech();clearHintViews();moveLabel.setText("Стабилизирую изображение…");}
-        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){stopSpeech();clearHintViews();moveLabel.setText("Стабилизирую изображение…");}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
+        if(hide){stopSpeech();clearHintViews();moveLabel.setText(message);}
+        else {final int token=generation;main.postDelayed(()->{if(active&&!destroyed&&token==generation&&verifiedFen.isEmpty()){stopSpeech();clearHintViews();moveLabel.setText(message);}},adviceGuard.remaining(SystemClock.uptimeMillis()));}
     }
     private final Runnable tick=new Runnable(){@Override public void run(){
         if(!active||destroyed)return;main.postDelayed(this,220);
@@ -184,7 +184,8 @@ public class CameraActivity extends AppCompatActivity {
                 if(answer==null||observation.history==null){
                     boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
                     boolean hold=adviceGuard.failure(SystemClock.uptimeMillis(),!hardLoss,!hardLoss,observation!=null&&observation.pendingChange);
-                    suspendAdvice(!hold);
+                    String message=observation==null||!observation.tracked?"Ищу доску…":!observation.readable?"Кадр не подтверждён":"Проверяю фигуры…";
+                    suspendAdvice(!hold,message);
                     status.setText(observation!=null&&!observation.problem.isEmpty()?observation.problem:"Жду чёткий кадр доски");return;
                 }
                 adviceGuard.verified(SystemClock.uptimeMillis());

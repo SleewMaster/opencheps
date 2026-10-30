@@ -173,6 +173,9 @@ public class PieceClassifier {
     }
 
     private SquareSampler.Sample[] sampleAll(Bitmap bmp, BoardDetector.Board board) {
+        return sampleAll(bmp,board,cameraMode);
+    }
+    private SquareSampler.Sample[] sampleAll(Bitmap bmp, BoardDetector.Board board, boolean pooled) {
         if (board.square < 8) return null;
         int rad = Math.max(4, (int) (board.square * 0.42f));
         SquareSampler.Sample[] samples = new SquareSampler.Sample[64];
@@ -180,7 +183,7 @@ public class PieceClassifier {
             for (int f = 0; f < 8; f++) {
                 int cx = Math.round(board.left + (f + 0.5f) * board.square);
                 int cy = Math.round(board.top  + (r + 0.5f) * board.square);
-                samples[r * 8 + f] = cameraMode?SquareSampler.sampleCamera(bmp,cx,cy,rad,annotationMask):SquareSampler.sample(bmp, cx, cy, rad, annotationMask);
+                samples[r * 8 + f] = pooled?SquareSampler.sampleCamera(bmp,cx,cy,rad,annotationMask):SquareSampler.sample(bmp, cx, cy, rad, annotationMask);
             }
         }
         return samples;
@@ -221,15 +224,24 @@ public class PieceClassifier {
         if(!trained)return null;
         SquareSampler.Sample[] samples=sampleAll(bmp,board);
         if(samples==null)return null;
+        // Pooling preserves faint white outlines, but expands the filled dark
+        // sprites in a low-resolution monitor photo. Offline banks were sampled
+        // directly: use both observations for dark pieces instead of matching
+        // the inflated silhouette alone. Same-camera bootstrap stays unchanged.
+        SquareSampler.Sample[] points=cameraMode&&normalizedTemplates!=null?sampleAll(bmp,board,false):null;
         float[][] costs=new float[64][VisualMoveTracker.PIECES.length()];
         for(int i=0;i<64;i++) {
             float[] feature=normalizedTemplates==null?samples[i].feature:normalizeContrast(samples[i].feature);
+            float[] point=points==null?null:normalizeContrast(points[i].feature);
             float empty=SquareSampler.lumDistance(feature,new float[feature.length]);
             costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
             for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
                 char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;
                 for(int k=0;k<labels.length;k++)if(labels[k]==wanted) {
-                    float d=SquareSampler.lumDistance(feature,normalizedTemplates==null?templates[k].feature:normalizedTemplates[k])/SquareSampler.N/SquareSampler.N;
+                    float[] template=normalizedTemplates==null?templates[k].feature:normalizedTemplates[k];
+                    float d=SquareSampler.lumDistance(feature,template);
+                    if(point!=null&&Character.isLowerCase(wanted))d=.25f*d+.75f*SquareSampler.lumDistance(point,template);
+                    d/=SquareSampler.N*SquareSampler.N;
                     if(d<best)best=d;
                 }
                 costs[i][j]=best;

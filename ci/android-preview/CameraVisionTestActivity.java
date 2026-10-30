@@ -9,8 +9,8 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin};
             for(int i=0;i<checks.length;i++)try{if(success.length()>0)success.append(' ');success.append(names[i]).append(' ').append(checks[i].getAsInt());}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -174,6 +174,39 @@ public class CameraVisionTestActivity extends Activity {
             }
         }return passed;
     }
+    private int checkHighlightedJoin(){int passed=0;
+        String[] opening={"e2e4","e7e5","g1f3"},moves={"b8c6","f1c4","g8f6","d2d3","f8c5","e1g1","d7d6","c2c3"};
+        char[][] initial=new char[8][];for(int r=0;r<8;r++)initial[r]=START[r].toCharArray();
+        Bitmap training=NativeVisionCheck.render(640,640,0,initial,THEMES[0]);PieceClassifier learned=new PieceClassifier();
+        if(!learned.tryBootstrap(training,new BoardDetector.Board(0,0,640,1)))throw new AssertionError("highlight template fixture");
+        PieceTemplates bank=learned.exportTemplates();training.recycle();
+        for(int theme:new int[]{0,2})for(Side side:new Side[]{Side.WHITE,Side.BLACK}){
+            ChessPosition expected=new ChessPosition(initial,Side.WHITE,"KQkq","-");for(String move:opening)expected=advance(expected,move);
+            float[] corners={120,80,660,140,700,720,60,760};CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));
+            for(int ply=0;ply<=moves.length;ply++){
+                if(ply>0)expected=advance(expected,moves[ply-1]);String last=ply==0?opening[opening.length-1]:moves[ply-1];
+                int from=('8'-last.charAt(1))*8+last.charAt(0)-'a',to=('8'-last.charAt(3))*8+last.charAt(2)-'a';
+                if(side==Side.BLACK){from=63-from;to=63-to;}
+                Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[theme],new int[]{from,to});
+                Bitmap shot=photograph(raw,shaken(corners,ply),true);CameraBoard.FrameResult seen=null;
+                if(ply==0){
+                    for(int n=0;n<4;n++){seen=session.readFrame(shot,corners);if(seen.position!=null)throw new AssertionError("highlight midgame bypassed review");if(seen.review!=null)break;}
+                    if(seen.review==null)throw new AssertionError("highlight review missing "+seen.problem);
+                    PositionSeed seed=PositionSeed.parse(CameraBoard.fen(expected),side);session.applyReview(seen.review,seed);
+                }
+                for(int n=0;n<4;n++){seen=session.readFrame(shot,corners);if(seen.position!=null)break;}
+                if(seen.position==null||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=ply){save(shot,"camera-photo.png");throw new AssertionError("highlight join stopped theme="+theme+" side="+side+" ply="+ply+" "+seen.problem);}
+                if(ply==2){
+                    Bitmap hand=shot.copy(Bitmap.Config.ARGB_8888,true);Canvas c=new Canvas(hand);Paint p=new Paint();p.setColor(0xffa98367);c.drawRect(250,200,430,430,p);
+                    if(session.readFrame(hand,corners).position!=null)throw new AssertionError("highlight join accepted hand");hand.recycle();
+                    seen=session.readFrame(shot,corners);if(seen.position==null)seen=session.readFrame(shot,corners);
+                    if(seen.position==null)throw new AssertionError("highlight join did not recover from hand "+seen.problem);
+                }
+                raw.recycle();shot.recycle();passed++;
+            }
+        }return passed;
+    }
+    private ChessPosition advance(ChessPosition position,String move){for(ChessPosition next:position.successors())if(next.move.equals(move))return next;throw new AssertionError("illegal camera fixture "+move);}
     private void invalidateOpticalFeatures(CameraBoard session){try{
         java.lang.reflect.Field gf=CameraBoard.class.getDeclaredField("geometry");gf.setAccessible(true);Object geometry=gf.get(session);
         java.lang.reflect.Field mf=geometry.getClass().getDeclaredField("motion");mf.setAccessible(true);Object motion=mf.get(geometry);

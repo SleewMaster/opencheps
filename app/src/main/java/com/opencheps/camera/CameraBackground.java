@@ -5,7 +5,25 @@ import java.util.Arrays;
 /** Checks visibility of cell background corners, independently of piece recognition. */
 public final class CameraBackground {
     private final float[][] reference;
-    public CameraBackground(int[] pixels,int width,int height){reference=sample(pixels,width,height);}
+    public CameraBackground(int[] pixels,int width,int height){
+        reference=sample(pixels,width,height);
+        // Joining a running game captures last-move/check highlights too. They are
+        // transient paint, not the board background: otherwise their disappearance
+        // plus the next two highlights looks like four or more covered cells.
+        float[][] plain=new float[2][3];
+        for(int parity=0;parity<2;parity++)for(int channel=0;channel<3;channel++){
+            float[] values=new float[128];int n=0;
+            for(int cell=0;cell<64;cell++)if(((cell/8+cell%8)&1)==parity)
+                for(int corner=0;corner<4;corner++)values[n++]=reference[cell*4+corner][channel];
+            Arrays.sort(values);plain[parity][channel]=(values[63]+values[64])/2;
+        }
+        for(int cell=0;cell<64;cell++){
+            float[] color=plain[(cell/8+cell%8)&1];int outliers=0;
+            for(int corner=0;corner<4;corner++)if(error(reference[cell*4+corner],color)>42)outliers++;
+            if(outliers>=2)for(int corner=0;corner<4;corner++)reference[cell*4+corner]=color.clone();
+        }
+    }
+    private static float error(float[] a,float[] b){float e=0;for(int c=0;c<3;c++)e=Math.max(e,Math.abs(a[c]-b[c]));return e;}
     public boolean visible(int[] pixels,int width,int height){
         float[][] current=sample(pixels,width,height);float[] offset=new float[3];
         for(int channel=0;channel<3;channel++){
