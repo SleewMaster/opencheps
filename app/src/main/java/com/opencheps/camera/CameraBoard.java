@@ -25,8 +25,6 @@ public final class CameraBoard {
     private Side perspective;
     private final java.util.List<PieceTemplates> banks;
     private final FrameConsensus reviewConsensus=new FrameConsensus();
-    private final FrameConsensus openingConsensus=new FrameConsensus();
-    private boolean openingCandidate;
     private volatile boolean reviewRequested;
     private boolean autoReviewOff;
     private Review pendingReview;
@@ -60,25 +58,6 @@ public final class CameraBoard {
         consensus.accept(null);consensus.accept(null);cancelReview();
     }
     public PieceTemplates templates(){return classifier.exportTemplates();}
-    private ChessPosition readOpening(Bitmap square){
-        openingCandidate=false;PieceClassifier selected=null;VisualMoveTracker.Match best=null;
-        for(PieceTemplates bank:banks){
-            PieceClassifier reader=new PieceClassifier();reader.setCameraMode(true);reader.useTemplates(bank,perspective);
-            float[][] seen=reader.labelCosts(square,bounds);if(seen==null)continue;
-            float[][] canonical=new float[64][];for(int i=0;i<64;i++)canonical[i]=seen[perspective==Side.BLACK?63-i:i];
-            VisualMoveTracker.Match match=CameraOpening.match(canonical);
-            if(match!=null&&(best==null||match.error<best.error)){best=match;selected=reader;}
-        }
-        if(best==null){openingConsensus.accept(null);return null;}
-        openingCandidate=true;String key=fen(best.position);
-        if(!openingConsensus.accept(key)){problem="Первый ход белых найден · подтверждаю позицию";return null;}
-        char[][] screen=perspective==Side.WHITE?best.position.board:FenBuilder.flip(best.position.board);
-        classifier.useTemplates(PieceClassifier.withObserved(selected.exportTemplates(),screen,selected.snapshotFeatures(square,bounds)),perspective);
-        position=best.position;history.reset(fen(CameraOpening.initial()));history.advance(position);
-        confidenceScale=1;unreadPositions=0;consensus.accept(key);consensus.accept(key);
-        square.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);background=new CameraBackground(boardPixels,SIZE,SIZE);
-        classifier.commitConfirmed(screen,square,bounds);return position;
-    }
     private Review readReview(Bitmap square){
         java.util.List<PieceTemplates> candidates=new java.util.ArrayList<>(banks);
         if(classifier.isTrained())candidates.add(0,classifier.exportTemplates());
@@ -125,11 +104,11 @@ public final class CameraBoard {
         float[] scaled=corners.clone();for(int i=0;i<4;i++){scaled[i*2]*=sx;scaled[i*2+1]*=sy;}
         if(reframe){reframe=false;geometry.reset();consensus.accept(null);}
         CameraGridTracker.Result tracked=geometry.update(gray,scaled);
-        if(tracked==null){openingConsensus.accept(null);reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,null,false,false,false,"Не вижу всю сетку · держи все 64 клетки внутри изображения камеры.");}
+        if(tracked==null){reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,null,false,false,false,"Не вижу всю сетку · держи все 64 клетки внутри изображения камеры.");}
         float[] real=tracked.corners.clone();for(int i=0;i<4;i++){real[i*2]/=sx;real[i*2+1]/=sy;}
-        if(!tracked.readable){openingConsensus.accept(null);reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,real,true,false,false,"Сетка найдена, но кадр смазан. Коснись изображения для фокуса.");}
+        if(!tracked.readable){reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,real,true,false,false,"Сетка найдена, но кадр смазан. Коснись изображения для фокуса.");}
         Bitmap square=rectify(frame,real);
-        if(square==null){openingConsensus.accept(null);reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,null,false,false,false);}
+        if(square==null){reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,null,false,false,false);}
         try {
             ChessPosition p=read(square);
             return new FrameResult(p,real,true,!covered,pendingChange,problem,p==null?null:history.snapshot(),pendingReview);
@@ -158,18 +137,13 @@ public final class CameraBoard {
         problem="";
         if(reviewRequested){pendingReview=readReview(rectified);return null;}
         if(!classifier.isTrained()) {
-            if(!classifier.tryBootstrap(rectified,bounds)){
-                ChessPosition opening=readOpening(rectified);if(opening!=null)return opening;
-                if(!openingCandidate){if(!autoReviewOff)pendingReview=readReview(rectified);else problem="Нажми «Позиция», чтобы начать с текущей расстановки.";}
-                return null;
-            }
+            if(!classifier.tryBootstrap(rectified,bounds)){if(!autoReviewOff)pendingReview=readReview(rectified);else problem="Нажми «Позиция», чтобы начать с текущей расстановки.";return null;}
             // Reject a disagreement rather than attaching opposite labels to the templates.
             if(classifier.bootstrapSide()!=perspective){classifier.reset();problem="Сетку вижу. Проверь кнопку «Снизу»: цвет должен совпадать с нижними фигурами.";return null;}
             confidenceScale=CameraConfidence.scale(classifier.labelCosts(rectified,bounds));
             rectified.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);
             background=new CameraBackground(boardPixels,SIZE,SIZE);
-            char[][] start={"rnbqkbnr".toCharArray(),"pppppppp".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"........".toCharArray(),"PPPPPPPP".toCharArray(),"RNBQKBNR".toCharArray()};
-            position=new ChessPosition(start,Side.WHITE,"KQkq","-");
+            position=CameraOpening.initial();
             history.reset(fen(position));
         }
         rectified.getPixels(boardPixels,0,SIZE,0,0,SIZE,SIZE);

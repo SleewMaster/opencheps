@@ -11,7 +11,9 @@ public class CameraVisionTestActivity extends Activity {
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
             String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK"};
             java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative};
-            for(int i=0;i<checks.length;i++)try{if(success.length()>0)success.append(' ');success.append(names[i]).append(' ').append(checks[i].getAsInt());}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");}
+            String[] completed=new String[checks.length];
+            for(int i:new int[]{7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
+            if(failures.length()==0)for(String entry:completed){if(success.length()>0)success.append(' ');success.append(entry);}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
     }
@@ -226,20 +228,22 @@ public class CameraVisionTestActivity extends Activity {
         }return passed;
     }
     private int checkBlackStart(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
-        for(String first:new String[]{"e2e4","d2d4","g1f3","b1c3"})for(Side side:new Side[]{Side.WHITE,Side.BLACK}){
-            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));ChessPosition expected=advance(CameraOpening.initial(),first);
-            Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells(first,side)),shot=photograph(raw,corners,true);
-            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);
-            if(seen.position==null||seen.review!=null||seen.position.turn!=Side.BLACK||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=1||!seen.history.command.endsWith(" moves "+first)){save(shot,"camera-photo.png");throw new AssertionError("black first-move join "+first+" "+side+" "+seen.problem);}
-            raw.recycle();shot.recycle();expected=advance(expected,"e7e5");
-            raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells("e7e5",side));shot=photograph(raw,shaken(corners,1),true);seen=awaitBoard(session,shot,corners);
-            if(seen.position==null||seen.history.plies!=2||seen.position.turn!=Side.WHITE||!java.util.Arrays.deepEquals(seen.position.board,expected.board))throw new AssertionError("black reply was not observed "+first+" "+side+" "+seen.problem);
+        for(String first:new String[]{"e2e4","d2d4","g1f3","b1c3"})for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(boolean late:new boolean[]{false,true}){
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));ChessPosition initial=CameraOpening.initial(),expected=advance(initial,first);Bitmap raw,shot;
+            if(!late){raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?initial.board:FenBuilder.flip(initial.board),THEMES[0]);shot=photograph(raw,corners,true);if(awaitBoard(session,shot,corners).position==null)throw new AssertionError("black initial calibration");raw.recycle();shot.recycle();}
+            raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells(first,side));shot=photograph(raw,corners,true);
+            if(late){CameraBoard.FrameResult review=null;for(int n=0;n<4;n++){review=session.readFrame(shot,corners);if(review.position!=null)throw new AssertionError("late black start invented opening history");if(review.review!=null)break;}if(review.review==null)throw new AssertionError("late black review missing "+review.problem);session.applyReview(review.review,PositionSeed.parse(CameraBoard.fen(expected),side));}
+            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);int firstPly=late?0:1;
+            if(seen.position==null||seen.position.turn!=Side.BLACK||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=firstPly){save(shot,"camera-photo.png");throw new AssertionError("black first-move join "+first+" "+side+" late="+late+" "+seen.problem);}
+            raw.recycle();shot.recycle();expected=advance(expected,"e7e5");raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells("e7e5",side));shot=photograph(raw,shaken(corners,1),true);seen=awaitBoard(session,shot,corners);
+            if(seen.position==null||seen.history.plies!=firstPly+1||seen.position.turn!=Side.WHITE||!java.util.Arrays.deepEquals(seen.position.board,expected.board))throw new AssertionError("black reply was not observed "+first+" "+side+" late="+late+" "+seen.problem);
             raw.recycle();shot.recycle();passed++;
         }return passed;
     }
     private int checkAlternative(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
         for(int theme:new int[]{0,2})for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(boolean missedReply:new boolean[]{false,true}){
-            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));ChessPosition expected=advance(CameraOpening.initial(),"e2e4");
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));ChessPosition initial=CameraOpening.initial(),expected=advance(initial,"e2e4");
+            Bitmap training=NativeVisionCheck.render(640,640,0,side==Side.WHITE?initial.board:FenBuilder.flip(initial.board),THEMES[theme]),initialShot=photograph(training,corners,true);if(awaitBoard(session,initialShot,corners).position==null)throw new AssertionError("alternative initial calibration");training.recycle();initialShot.recycle();
             Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[theme]),shot=photograph(raw,corners,true);
             CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);if(seen.position==null)throw new AssertionError("alternative start "+side+" "+seen.problem);
             CameraMoveFeedback feedback=new CameraMoveFeedback();feedback.recommend(seen.history,"d7d5");String old=seen.history.key;raw.recycle();shot.recycle();

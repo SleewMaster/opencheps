@@ -5,7 +5,10 @@ package com.opencheps.camera;
 public final class BoardGridLocator {
     private static final int S=320;
     private BoardGridLocator(){}
-    public static float[] locate(BoardMotionTracker.Frame frame,float[] approximate){
+    public static float[] locate(BoardMotionTracker.Frame frame,float[] approximate){return locate(frame,approximate,false);}
+    public static float[] locateAnySize(BoardMotionTracker.Frame frame,float[] approximate){float[] fitted=locate(frame,approximate,false);return fitted!=null?fitted:locate(frame,approximate,true);}
+    private static final class Candidate {final float[] corners;final double score;Candidate(float[] q,double s){corners=q;score=s;}}
+    private static float[] locate(BoardMotionTracker.Frame frame,float[] approximate,boolean broad){
         if(approximate==null||approximate.length!=8)return null;
         double[] projection=homography(approximate);if(projection==null)return null;
         float[] pixels=new float[S*S];
@@ -13,14 +16,21 @@ public final class BoardGridLocator {
             double[] p=map(projection,x/(double)S,y/(double)S);pixels[y*S+x]=frame.at(p[0],p[1]);
         }
         BoardMotionTracker.Frame image=new BoardMotionTracker.Frame(S,S,pixels);
-        java.util.List<double[]> horizontal=axis(image,false),vertical=axis(image,true);
-        float[] q=null;double best=-1;
+        java.util.List<double[]> horizontal=axis(image,false,broad),vertical=axis(image,true,broad);
+        java.util.List<Candidate> candidates=new java.util.ArrayList<>();
         for(double[] x:vertical)for(double[] y:horizontal){
             float[] candidate={(float)x[0],(float)y[0],(float)(x[0]+8*x[1]),(float)y[0],(float)(x[0]+8*x[1]),(float)(y[0]+8*y[1]),(float)x[0],(float)(y[0]+8*y[1])};
             if(checkerMatches(image,candidate)<52)continue;
-            double value=score(image,candidate);if(value>best){best=value;q=candidate;}
+            double value=score(image,candidate);candidates.add(new Candidate(candidate,value));
         }
-        if(q==null)return null;
+        candidates.sort((a,b)->Double.compare(b.score,a.score));
+        // A strong partial-grid proposal can fail the final 64-cell check. Do not
+        // discard the visible board just because this local optimum ranked first.
+        for(int n=0;n<Math.min(broad?12:4,candidates.size());n++){
+            Candidate c=candidates.get(n);float[] result=refine(frame,image,projection,c.corners.clone(),c.score);if(result!=null)return result;
+        }return null;
+    }
+    private static float[] refine(BoardMotionTracker.Frame frame,BoardMotionTracker.Frame image,double[] projection,float[] q,double best){
         for(double step:new double[]{6,3,1.5,.6,.25})for(int round=0;round<5;round++){
             boolean changed=false;
             for(int coordinate=0;coordinate<8;coordinate++){
@@ -71,7 +81,7 @@ public final class BoardGridLocator {
         float[] fitted=locate(frame,expanded);if(fitted!=null)return fitted;
         }return null;
     }
-    private static java.util.List<double[]> axis(BoardMotionTracker.Frame image,boolean vertical){
+    private static java.util.List<double[]> axis(BoardMotionTracker.Frame image,boolean vertical,boolean broad){
         double[] response=new double[S];
         for(int i=4;i<S-4;i++){
             double total=0;int count=0;
@@ -85,7 +95,7 @@ public final class BoardGridLocator {
         java.util.List<double[]> candidates=new java.util.ArrayList<>();
         // A handheld monitor board can occupy only half the preview. The old
         // minimum (23*8/320) silently excluded it from whole-preview recovery.
-        for(double spacing=14;spacing<=44;spacing+=.25)for(double start=0;start+8*spacing<=S+1;start+=.5){
+        for(double spacing=broad?14:23;spacing<=44;spacing+=.25)for(double start=0;start<=(broad?S+1-8*spacing:112);start+=.5){
             if(start+8*spacing>S+1)continue;
             double sum=0;for(int i=1;i<8;i++){
                 int at=(int)Math.round(start+i*spacing);double value=0;
@@ -98,8 +108,10 @@ public final class BoardGridLocator {
         candidates.sort((a,b)->Double.compare(b[2],a[2]));
         java.util.List<double[]> peaks=new java.util.ArrayList<>();
         for(double[] candidate:candidates){
-            boolean close=false;for(double[] p:peaks)if(Math.abs(p[0]-candidate[0])<8&&Math.abs(p[1]-candidate[1])<2){close=true;break;}
-            if(!close)peaks.add(candidate);if(peaks.size()==12)break;
+            // Eight pixels can be half a small cell: merging those phases loses
+            // the real board edge in favour of a nearby piece-contour response.
+            boolean close=false;for(double[] p:peaks)if(Math.abs(p[0]-candidate[0])<(broad?3:8)&&Math.abs(p[1]-candidate[1])<(broad?.75:2)){close=true;break;}
+            if(!close)peaks.add(candidate);if(peaks.size()==(broad?32:12))break;
         }return peaks;
     }
     private static double score(BoardMotionTracker.Frame image,float[] q){return score(image,q,.035/8);}

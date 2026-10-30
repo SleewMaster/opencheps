@@ -25,7 +25,7 @@ public final class CameraGridTracker {
         float[] seed=last==null?approximate:last;
         float[] fitted=BoardGridLocator.locate(frame,seed);
         if(fitted==null)fitted=BoardGridLocator.locateExpanded(frame,seed);
-        if(fitted==null)fitted=BoardGridLocator.locate(frame,new float[]{2,2,frame.width-3,2,frame.width-3,frame.height-3,2,frame.height-3});
+        if(fitted==null)fitted=BoardGridLocator.locateAnySize(frame,new float[]{2,2,frame.width-3,2,frame.width-3,frame.height-3,2,frame.height-3});
         if(fitted==null)return null;
         boolean readable=sharp(frame,fitted);
         if(!readable)return new Result(fitted,false,true);
