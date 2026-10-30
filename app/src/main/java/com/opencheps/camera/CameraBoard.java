@@ -12,11 +12,9 @@ public final class CameraBoard {
     private final FrameConsensus consensus=new FrameConsensus();
     private ChessPosition position;
     private final PositionHistory history=new PositionHistory();
-    private int lostFrames,recoveryFailures;
-    private boolean recovering;
+    private int unreadPositions;
     private float confidenceScale=1;
-    private BoardMotionTracker motion=new BoardMotionTracker();
-    private boolean gridLocked;
+    private final CameraGridTracker geometry=new CameraGridTracker();
     private volatile boolean reframe;
     private String problem="";
     private int[] cameraPixels;
@@ -55,7 +53,7 @@ public final class CameraBoard {
         perspective=seed.perspective;
         char[][] screen=perspective==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
         classifier.useTemplates(PieceClassifier.withObserved(review.bank,screen,review.features),perspective);
-        position=seed.position;history.reset(seed.fen());confidenceScale=1;
+        position=seed.position;history.reset(seed.fen());confidenceScale=1;unreadPositions=0;
         background=new CameraBackground(review.pixels,SIZE,SIZE);
         consensus.accept(null);consensus.accept(null);cancelReview();
     }
@@ -104,31 +102,19 @@ public final class CameraBoard {
         BoardMotionTracker.Frame gray=BoardMotionTracker.Frame.fromArgb(cameraPixels,w,h,480);
         float sx=gray.width/(float)w,sy=gray.height/(float)h;
         float[] scaled=corners.clone();for(int i=0;i<4;i++){scaled[i*2]*=sx;scaled[i*2+1]*=sy;}
-        if(reframe){reframe=false;recoverGeometry();}
-        if(!gridLocked){
-            float[] snapped=BoardGridLocator.locate(gray,scaled);
-            if(snapped==null)snapped=BoardGridLocator.locateExpanded(gray,scaled);
-            if(snapped==null)snapped=BoardGridLocator.locate(gray,new float[]{2,2,gray.width-3,2,gray.width-3,gray.height-3,2,gray.height-3});
-            if(snapped==null)return new FrameResult(null,null,false,true,false,"Не нахожу сетку 8×8. Покажи доску целиком; рамка должна охватывать клетки.");
-            scaled=snapped;
-        }
-        BoardMotionTracker.Result tracked=motion.update(gray,scaled);
-        if(tracked==null){consensus.accept(null);if(++lostFrames>=3)recoverGeometry();return new FrameResult(null,null,false,false,false,"Ищу доску заново · партия сохранена. Покажи все клетки.");}
-        lostFrames=0;
-        gridLocked=true;
+        if(reframe){reframe=false;geometry.reset();consensus.accept(null);}
+        CameraGridTracker.Result tracked=geometry.update(gray,scaled);
+        if(tracked==null){consensus.accept(null);return new FrameResult(null,null,false,false,false,"Не вижу всю сетку · держи все 64 клетки внутри изображения камеры.");}
         float[] real=tracked.corners.clone();for(int i=0;i<4;i++){real[i*2]/=sx;real[i*2+1]/=sy;}
-        if(!tracked.readable()){consensus.accept(null);return new FrameResult(null,real,true,false,false,"Сетка найдена, но кадр смазан. Коснись изображения для фокуса.");}
+        if(!tracked.readable){consensus.accept(null);return new FrameResult(null,real,true,false,false,"Сетка найдена, но кадр смазан. Коснись изображения для фокуса.");}
         Bitmap square=rectify(frame,real);
         if(square==null){consensus.accept(null);return new FrameResult(null,null,false,false,false);}
         try {
             ChessPosition p=read(square);
-            if(p!=null){recovering=false;recoveryFailures=0;}
-            else if(pendingReview==null&&recovering&&++recoveryFailures>=3)recoverGeometry();
             return new FrameResult(p,real,true,!covered,pendingChange,problem,p==null?null:history.snapshot(),pendingReview);
         }
         finally {square.recycle();}
     }
-    private void recoverGeometry(){gridLocked=false;motion=new BoardMotionTracker();lostFrames=0;recoveryFailures=0;recovering=true;consensus.accept(null);}
     public PositionHistory.Snapshot historySnapshot(){return history.snapshot();}
     public static Bitmap rectify(Bitmap source,float[] corners) {
         if(!CameraGeometry.valid(corners,source.getWidth(),source.getHeight()))return null;
@@ -170,7 +156,8 @@ public final class CameraBoard {
             for(int label=0;label<canonical[i].length;label++)canonical[i][label]*=confidenceScale;
         }
         VisualMoveTracker.Match match=VisualMoveTracker.match(position,canonical);
-        if(match==null){consensus.accept(null);problem="Сетку вижу, но фигуры пока не совпали. Дождись конца анимации и проверь резкость.";return null;}
+        if(match==null){consensus.accept(null);if(++unreadPositions%3==0)geometry.reset();problem=unreadPositions>=6?"Позиция не совпала с историей · нажми «Позиция», чтобы продолжить с текущей доски.":"Сетку вижу · проверяю фигуры после хода";return null;}
+        unreadPositions=0;
         pendingChange=match.plies>0;
         String key=fen(match.position);
         if(!consensus.accept(key)){problem="Доска найдена · подтверждаю положение фигур";return null;}

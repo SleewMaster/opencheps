@@ -9,8 +9,8 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation};
             for(int i=0;i<checks.length;i++)try{if(success.length()>0)success.append(' ');success.append(names[i]).append(' ').append(checks[i].getAsInt());}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -153,6 +153,32 @@ public class CameraVisionTestActivity extends Activity {
             session.cancelReview();raw.recycle();shot.recycle();passed++;
         }return passed;
     }
+    private int checkContinuation(){int passed=0;
+        String[] moves={"e2e4","e7e5","g1f3","b8c6","f1c4","g8f6","d2d3","f8c5","e1g1","d7d6","c2c3","e8g8"};
+        for(int theme:new int[]{0,2})for(Side side:new Side[]{Side.WHITE,Side.BLACK}){
+            float[] anchor={120,80,660,140,700,720,60,760};char[][] initial=new char[8][];for(int r=0;r<8;r++)initial[r]=START[r].toCharArray();
+            ChessPosition expected=new ChessPosition(initial,Side.WHITE,"KQkq","-");CameraBoard session=new CameraBoard(side);
+            for(int ply=0;ply<=moves.length;ply++){
+                if(ply>0){ChessPosition next=null;for(ChessPosition n:expected.successors())if(n.move.equals(moves[ply-1]))next=n;if(next==null)throw new AssertionError("continuation fixture move");expected=next;}
+                Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[theme]);
+                for(int repeat=0;repeat<2;repeat++){
+                    // Monitor moire or changed sprites may invalidate the fixed reference
+                    // patches on every frame. Fresh grid evidence must still let moves advance.
+                    invalidateOpticalFeatures(session);
+                    Bitmap shot=photograph(raw,shaken(anchor,ply*2+repeat),true);
+                    CameraBoard.FrameResult seen=session.readFrame(shot,anchor);
+                    if(!seen.tracked||!seen.readable)throw new AssertionError("continuation grid theme="+theme+" side="+side+" ply="+ply+" "+seen.problem);
+                    if(repeat==1&&(seen.position==null||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=ply)){save(shot,"camera-photo.png");throw new AssertionError("continuation stopped after hint theme="+theme+" side="+side+" ply="+ply+" "+seen.problem);}
+                    shot.recycle();
+                }raw.recycle();passed++;
+            }
+        }return passed;
+    }
+    private void invalidateOpticalFeatures(CameraBoard session){try{
+        java.lang.reflect.Field gf=CameraBoard.class.getDeclaredField("geometry");gf.setAccessible(true);Object geometry=gf.get(session);
+        java.lang.reflect.Field mf=geometry.getClass().getDeclaredField("motion");mf.setAccessible(true);Object motion=mf.get(geometry);
+        java.lang.reflect.Field ff=motion.getClass().getDeclaredField("features");ff.setAccessible(true);((java.util.List<?>)ff.get(motion)).clear();
+    }catch(ReflectiveOperationException e){throw new AssertionError(e);}}
     private float[] shaken(float[] corners,int step){
         if(step==0)return corners.clone();
         double angle=Math.toRadians(Math.sin(step*1.2)*.65),scale=1+Math.cos(step*.8)*.004,dx=Math.sin(step)*7,dy=Math.cos(step*.9)*5;

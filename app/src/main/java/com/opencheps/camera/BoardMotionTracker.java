@@ -152,6 +152,17 @@ public final class BoardMotionTracker {
             double dx=frame.at(cx+x+1,cy+y)-frame.at(cx+x-1,cy+y),dy=frame.at(cx+x,cy+y+1)-frame.at(cx+x,cy+y-1);value+=dx*dx+dy*dy;
         }return value/49;
     }
+    /** Median checker-intersection gradient, independent of optical patch correlation. */
+    public static float gridEnergy(Frame frame,float[] corners){
+        double[] h=BoardGridLocator.homography(corners);if(h==null)return 0;
+        double[] values=new double[49];int n=0;
+        for(int r=1;r<8;r++)for(int f=1;f<8;f++){
+            double[] p=BoardGridLocator.map(h,f/8.,r/8.);
+            if(!inside(frame,p[0],p[1]))return 0;
+            values[n++]=energy(frame,p[0],p[1]);
+        }
+        Arrays.sort(values);return (float)values[24];
+    }
     private static double cornerScore(Frame frame,int cx,int cy){
         double xx=0,yy=0,xy=0;
         for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){

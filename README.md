@@ -1,4 +1,10 @@
-## 0.11.0: камера с текущей позиции и история партии
+## Исправление камеры после первого хода
+
+Если оптическое слежение теряет опорные точки, сетка теперь ищется заново в том же кадре. Для чтения фигур больше не требуется успешное сопоставление со старой картинкой. Чёткая сетка, видимый фон клеток и два совпадающих законных чтения остаются обязательными. История партии сохраняется.
+
+Предпросмотр показывает весь кадр камеры без обрезки по краям. Держите все 64 клетки внутри изображения. Если пропущено слишком много ходов и позиция больше не соответствует истории, приложение предлагает кнопку «Позиция» для подтверждения текущей доски вместо бесконечного ожидания стабилизации.
+
+## 0.12.0: камера с текущей позиции и история партии
 
 Движок теперь получает исходную FEN и все подтверждённые ходы. Он учитывает повторения, права рокировки, взятие на проходе и счётчик 50 ходов. Раньше передавалась только текущая FEN, поэтому история повторений терялась. При старте посреди партии известны только новые ходы после подключения; предыдущие повторения из изображения восстановить нельзя. Победа в каждой позиции не гарантируется.
 
@@ -16,9 +22,9 @@
 
 ---
 
-# OpenCheps Bot 0.11.0
+# OpenCheps Bot 0.12.0
 
-**[Скачать APK 0.11.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.11.0/OpenCheps_Bot_0.11.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.11.0)**
+**[Скачать APK 0.12.0 / Download APK](https://github.com/SleewMaster/opencheps/releases/download/v0.12.0/OpenCheps_Bot_0.12.0.apk)** · **[Описание и установка / Release notes](https://github.com/SleewMaster/opencheps/releases/tag/v0.12.0)**
 
 Экспериментальная сборка для Android 8.0+ (ARM64). Выбор **Экран / Камера**, локальный Stockfish 18 и подсказки стрелками. Камера рассчитана на **2D-доску другого экрана, в том числе посреди партии**; настоящие объёмные фигуры пока не поддерживаются. Проверки прошли в эмуляторе; реальная съёмка телефоном ещё не проверена.
 
@@ -56,4 +62,4 @@ App package: `com.opencheps.bottrainer`. Camera mode does not run concurrently w
 
 ## License
 
-App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.11.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
+App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.12.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
