@@ -1,0 +1,17 @@
+OpenCheps Bot 0.13.0 is a fork of OpenCheps.
+App source: https://github.com/SleewMaster/opencheps/tree/60c537dcedfdf26d3fe447a427ac1532b96c787f
+Upstream: https://github.com/Sethdsai/opencheps
+App license: MIT; copyright (c) 2026 OpenCheps contributors. See OpenCheps_LICENSE.txt.
+
+This APK bundles the unmodified official Stockfish 18 Android ARMv8 binary.
+Stockfish is licensed under GNU GPL version 3. See Stockfish_COPYING.txt.
+Corresponding source tag: https://github.com/official-stockfish/Stockfish/tree/sf_18
+Source archive: https://github.com/official-stockfish/Stockfish/archive/refs/tags/sf_18.tar.gz
+Original binary release: https://github.com/official-stockfish/Stockfish/releases/tag/sf_18
+SHA-256 of the bundled lib/arm64-v8a/libstockfish.so:
+cc3b3b74466b6d85cdc0f8cfdad4111c6a44bd0698f4eab96fea7b359a54d3d4
+
+AndroidX libraries, including CameraX 1.4.0, and Material Components are used under Apache License 2.0.
+AndroidX source: https://android.googlesource.com/platform/frameworks/support/
+Material Components source: https://github.com/material-components/material-components-android
+Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
