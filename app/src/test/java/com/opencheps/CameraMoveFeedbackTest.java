@@ -1,0 +1,12 @@
+package com.opencheps;
+import com.opencheps.camera.*;import com.opencheps.engine.PositionHistory;import com.opencheps.vision.*;import org.junit.Test;import static org.junit.Assert.*;
+public class CameraMoveFeedbackTest {
+    private ChessPosition play(ChessPosition p,String move){for(ChessPosition n:p.successors())if(n.move.equals(move))return n;throw new AssertionError(move);}
+    private PositionHistory start(){PositionHistory h=new PositionHistory();h.reset("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");return h;}
+    @Test public void recommendedMoveDoesNotAdvanceHistory(){PositionHistory h=start();String command=h.snapshot().command;new CameraMoveFeedback().recommend(h.snapshot(),"e2e4");assertEquals(command,h.snapshot().command);}
+    @Test public void blackAlternativeIsReportedFromActualHistory(){PositionHistory h=start();ChessPosition e4=play(CameraOpening.initial(),"e2e4");h.advance(e4);CameraMoveFeedback f=new CameraMoveFeedback();f.recommend(h.snapshot(),"d7d5");assertNull(f.observed(h.snapshot()));ChessPosition d6=play(e4,"d7d6");h.advance(d6);assertEquals("Сыграно d7 → d6 вместо d7 → d5",f.observed(h.snapshot()));assertTrue(h.snapshot().command.endsWith(" moves e2e4 d7d6"));assertNull(f.observed(h.snapshot()));}
+    @Test public void skippedReplyStillReportsUsersActualMove(){PositionHistory h=start();CameraMoveFeedback f=new CameraMoveFeedback();f.recommend(h.snapshot(),"e2e4");ChessPosition d4=play(CameraOpening.initial(),"d2d4"),d5=play(d4,"d7d5");h.advance(d4,d5);assertEquals("Сыграно d2 → d4 вместо e2 → e4",f.observed(h.snapshot()));assertTrue(h.snapshot().command.endsWith(" moves d2d4 d7d5"));}
+    @Test public void followingAdviceIsNotAnError(){PositionHistory h=start();CameraMoveFeedback f=new CameraMoveFeedback();f.recommend(h.snapshot(),"e2e4");h.advance(play(CameraOpening.initial(),"e2e4"));assertNull(f.observed(h.snapshot()));}
+    @Test public void newGameDoesNotReuseOldRecommendation(){PositionHistory h=start();CameraMoveFeedback f=new CameraMoveFeedback();f.recommend(h.snapshot(),"e2e4");h=start();h.advance(play(CameraOpening.initial(),"d2d4"));assertNull(f.observed(h.snapshot()));}
+    @Test public void illegalRecommendationIgnored(){PositionHistory h=start();CameraMoveFeedback f=new CameraMoveFeedback();f.recommend(h.snapshot(),"e2e5");h.advance(play(CameraOpening.initial(),"d2d4"));assertNull(f.observed(h.snapshot()));}
+}

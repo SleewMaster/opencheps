@@ -13,15 +13,17 @@ public final class CameraBoardView extends View {
     private final Paint paint=new Paint(3);
     private final float[] corners=new float[8];
     private boolean editing=true;
+    private boolean aligned;
     private int dragging=-1;
     private List<StockfishEngine.Pv> moves=Collections.emptyList();
     private Side perspective=Side.WHITE;
     public Runnable onSizeChanged;
     public CameraBoardView(Context c){super(c);setContentDescription("Четыре угла доски: перетащи маркеры к углам");}
     public float[] corners(){return corners.clone();}
-    public void setTrackedCorners(float[] value){if(!editing&&CameraGeometry.valid(value,getWidth(),getHeight())){System.arraycopy(value,0,corners,0,8);invalidate();}}
+    public void setTrackedCorners(float[] value){if(!editing&&CameraGeometry.valid(value,getWidth(),getHeight())){System.arraycopy(value,0,corners,0,8);aligned=true;invalidate();}}
+    public void trackingLost(){aligned=false;moves=Collections.emptyList();setContentDescription("Доска потеряна · ищу сетку");invalidate();}
     public boolean editing(){return editing;}
-    public void setEditing(boolean value){editing=value;moves=Collections.emptyList();invalidate();}
+    public void setEditing(boolean value){editing=value;aligned=false;moves=Collections.emptyList();invalidate();}
     public void setMoves(List<StockfishEngine.Pv> values,Side side){moves=new ArrayList<>(values);perspective=side;setContentDescription(moves.isEmpty()?"Доска камеры":"Ход "+moves.get(0).uci);invalidate();}
     public void clear(){moves=Collections.emptyList();invalidate();}
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){
@@ -46,7 +48,7 @@ public final class CameraBoardView extends View {
     }
     @Override public boolean performClick(){super.performClick();return true;}
     @Override protected void onDraw(Canvas c){
-        super.onDraw(c);if(getWidth()==0)return;
+        super.onDraw(c);if(getWidth()==0||(!editing&&!aligned))return;
         Path outline=new Path();outline.moveTo(corners[0],corners[1]);for(int i=1;i<4;i++)outline.lineTo(corners[i*2],corners[i*2+1]);outline.close();
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(3);paint.setColor(0xffb9f66e);c.drawPath(outline,paint);
         Matrix projection=new Matrix();boolean valid=CameraGeometry.valid(corners,getWidth(),getHeight());

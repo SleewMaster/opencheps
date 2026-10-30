@@ -37,7 +37,10 @@ public class CameraActivity extends AppCompatActivity {
     private final CompletedAdvice adviceCache=new CompletedAdvice();
     private String activeSearchKey="";
     private TextView status,moveLabel;
-    private Button apply,pause,orientation;
+    private Button apply,pause,orientation,playing;
+    private final CameraMoveFeedback moveFeedback=new CameraMoveFeedback();
+    private String deviation="";
+    private long deviationUntil;
     private CheckBox voiceToggle;
     private Button repeat;
     private CameraSpeech speech;
@@ -61,6 +64,7 @@ public class CameraActivity extends AppCompatActivity {
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         ScreenCaptureService.stopSession(this);userSide="b".equals(Prefs.userSide(this))?Side.BLACK:Side.WHITE;
+        perspective=userSide;
         templateBanks=CameraBoard.loadBanks(this);
         buildUi();
         speech=new CameraSpeech(this,(ready,message)->{
@@ -108,7 +112,7 @@ public class CameraActivity extends AppCompatActivity {
         status=text("Разреши камеру и выставь углы доски",12,0xff93a8c3);status.setLines(3);status.setGravity(Gravity.CENTER_VERTICAL);root.addView(status);
         moveLabel=text("Подсказка появится здесь",21,0xffeaf2ff);moveLabel.setLines(2);moveLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);moveLabel.setPadding(0,0,0,dp(6));root.addView(moveLabel);
         LinearLayout buttons=new LinearLayout(this);root.addView(buttons);
-        orientation=button("Снизу: белые");buttons.addView(orientation,new LinearLayout.LayoutParams(0,dp(52),1));orientation.setOnClickListener(v->{perspective=perspective==Side.WHITE?Side.BLACK:Side.WHITE;orientation.setText(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");reset(true);});
+        orientation=button(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");buttons.addView(orientation,new LinearLayout.LayoutParams(0,dp(52),1));orientation.setOnClickListener(v->{perspective=perspective==Side.WHITE?Side.BLACK:Side.WHITE;orientation.setText(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");reset(true);});
         apply=button("Начать");buttons.addView(apply,new LinearLayout.LayoutParams(0,dp(52),1));apply.setOnClickListener(v->{
             if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){permission.launch(Manifest.permission.CAMERA);return;}
             if(!boardView.editing()){invalidateAdvice();boardView.setEditing(true);apply.setText("Применить");status.setText("Выставь углы клеток и нажми «Применить». Текущая партия сохранится.");return;}
@@ -119,7 +123,10 @@ public class CameraActivity extends AppCompatActivity {
         pause=button("Пауза");buttons.addView(pause,new LinearLayout.LayoutParams(0,dp(52),1));pause.setOnClickListener(v->{
             paused=!paused;invalidateAdvice();pause.setText(paused?"Продолжить":"Пауза");status.setText(paused?"Пауза · камера открыта":"Продолжаю распознавание");
         });
-        Button positionButton=button("Позиция · начать с текущей");root.addView(positionButton,new LinearLayout.LayoutParams(-1,dp(42)));
+        LinearLayout positionRow=new LinearLayout(this);root.addView(positionRow,new LinearLayout.LayoutParams(-1,dp(48)));
+        Button positionButton=button("Позиция · начать с текущей");positionRow.addView(positionButton,new LinearLayout.LayoutParams(0,-1,2));
+        playing=button(userSide==Side.WHITE?"Играю: белыми":"Играю: чёрными");positionRow.addView(playing,new LinearLayout.LayoutParams(0,-1,1));
+        playing.setOnClickListener(v->{userSide=userSide==Side.WHITE?Side.BLACK:Side.WHITE;Prefs.setUserSide(this,userSide==Side.WHITE?"w":"b");playing.setText(userSide==Side.WHITE?"Играю: белыми":"Играю: чёрными");moveFeedback.reset();deviation="";invalidateAdvice();status.setText("Играю "+(userSide==Side.WHITE?"белыми":"чёрными")+" · положение доски не меняется");});
         positionButton.setOnClickListener(v->{
             if(board==null||boardView.editing()){status.setText("Выставь углы доски и нажми «Начать»");return;}
             invalidateAdvice();board.requestReview();paused=false;pause.setText("Пауза");status.setText("Читаю текущую позицию…");
@@ -152,7 +159,7 @@ public class CameraActivity extends AppCompatActivity {
         },ContextCompat.getMainExecutor(this));
     }
     private void reset(boolean editing){
-        invalidateAdvice();adviceCache.clear();board=null;paused=false;if(pause!=null)pause.setText("Пауза");
+        invalidateAdvice();adviceCache.clear();moveFeedback.reset();deviation="";board=null;paused=false;if(pause!=null)pause.setText("Пауза");
         announcement.reset();
         if(boardView!=null)boardView.setEditing(editing);
         if(apply!=null)apply.setText("Начать");
@@ -178,7 +185,8 @@ public class CameraActivity extends AppCompatActivity {
             try{result=session.readFrame(frame,corners);}catch(RuntimeException e){android.util.Log.w("OC/Camera","frame rejected",e);}
             finally{frame.recycle();}
             CameraBoard.FrameResult observation=result;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
-                if(observation!=null&&observation.corners!=null)boardView.setTrackedCorners(observation.corners);
+                if(observation==null||!observation.tracked)boardView.trackingLost();
+                else if(observation.corners!=null)boardView.setTrackedCorners(observation.corners);
                 if(observation!=null&&observation.review!=null){openReview(session,observation.review);return;}
                 ChessPosition answer=observation==null?null:observation.position;
                 if(answer==null||observation.history==null){
@@ -190,12 +198,13 @@ public class CameraActivity extends AppCompatActivity {
                 }
                 adviceGuard.verified(SystemClock.uptimeMillis());
                 verifiedPosition=answer;verifiedSearch=observation.history;String fen=verifiedSearch.fen;
+                String changed=moveFeedback.observed(verifiedSearch);if(changed!=null){deviation=changed;deviationUntil=SystemClock.uptimeMillis()+6000;}
                 if(!fen.equals(verifiedFen)){
                     generation++;if(!verifiedSearch.key.equals(activeSearchKey)){activeSearchKey="";engine.cancelSearch();}verifiedFen=fen;
                     if(!fen.equals(displayFen)){displayFen="";displayComplete=false;displayed=Collections.emptyList();stopSpeech();clearHintViews();moveLabel.setText("Подсказка появится здесь");}
                     updateRepeat();
                 }
-                if(answer.turn!=userSide){status.setText("Жду ход соперника · доска распознана");return;}
+                if(answer.turn!=userSide){status.setText(withFeedback("Жду ход соперника · доска распознана"));return;}
                 List<StockfishEngine.Pv> cached=adviceCache.get(verifiedSearch.key);
                 if(cached!=null){render(cached,fen,generation,true);return;}
                 if(!engineReady){status.setText(engineFailed?"Stockfish недоступен — открой режим заново":"Запускаю Stockfish…");return;}
@@ -225,7 +234,7 @@ public class CameraActivity extends AppCompatActivity {
     private void analyze(PositionHistory.Snapshot search){
         final String fen=search.fen;
         analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
-        int time=Prefs.thinkMs(this),count=Prefs.multiPv(this);status.setText("Считаю · "+time/1000f+" с");
+        int time=Prefs.thinkMs(this),count=Prefs.multiPv(this);status.setText(withFeedback("Считаю · "+time/1000f+" с"));
         analysis.execute(()->{
             try{List<StockfishEngine.Pv> moves=engine.topMoves(search,time,count);
                 main.post(()->{
@@ -238,8 +247,9 @@ public class CameraActivity extends AppCompatActivity {
         });
     }
     private void render(List<StockfishEngine.Pv> moves,String fen,int token,boolean complete){
-        if(!complete||!active||destroyed||paused||token!=generation||!fen.equals(verifiedFen)||moves.isEmpty())return;
+        if(!complete||!active||destroyed||paused||token!=generation||!fen.equals(verifiedFen)||moves.isEmpty()||verifiedPosition==null||verifiedPosition.turn!=userSide)return;
         if(MoveAnnouncement.label(fen,moves.get(0).uci)==null){status.setText("Перепроверяю допустимость хода");return;}
+        if(verifiedSearch!=null)moveFeedback.recommend(verifiedSearch,moves.get(0).uci);
         displayed=new ArrayList<>(moves);displayFen=fen;displayComplete=complete;boardView.setMoves(moves,perspective);
         showMove(moves.get(0),complete);updateRepeat();if(complete)announce(false);
     }
@@ -249,8 +259,9 @@ public class CameraActivity extends AppCompatActivity {
         String label=MoveAnnouncement.label(verifiedFen,uci);
         moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+(best.depth>0?"\nОценка "+score:""));
 
-        status.setText((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные"));
+        status.setText(withFeedback((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные")));
     }
+    private String withFeedback(String message){return !deviation.isEmpty()&&SystemClock.uptimeMillis()<deviationUntil?deviation+"\n"+message:message;}
     private boolean canAnnounce(){return active&&!destroyed&&!paused&&speech!=null&&speech.ready()&&voiceToggle.isChecked()&&displayComplete&&!displayed.isEmpty()&&!verifiedFen.isEmpty()&&verifiedFen.equals(displayFen);}
     private void updateRepeat(){if(repeat!=null)repeat.setEnabled(canAnnounce());}
     private void announce(boolean requested){

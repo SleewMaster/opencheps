@@ -20,10 +20,10 @@ public final class VisualMoveTracker {
         s.consider(old,null,0);
         List<ChessPosition> first=old.successors();
         for(ChessPosition p:first)s.consider(p,null,1);
-        // No skipped-frame search when the unchanged position is an excellent fit.
-        if(s.bestPlies!=0 || s.best>0.30f) {
-            for(ChessPosition p:first)for(ChessPosition q:p.successors())s.consider(q,p,2);
-        }
+        // A move followed by a capture can leave no good intermediate diagram in
+        // the camera frame. Low absolute error for the old board does not prove
+        // it is unchanged: always compare both observed plies before deciding.
+        for(ChessPosition p:first)for(ChessPosition q:p.successors())s.consider(q,p,2);
         float margin=s.second-s.best;
         // Require a clear unique match. A popup, animation, or covered piece
         // must not be committed as a chess move.

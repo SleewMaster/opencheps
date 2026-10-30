@@ -13,6 +13,9 @@ public class CameraHintPreviewActivity extends Activity {
         Bitmap board=NativeVisionCheck.render(640,640,0,black?FenBuilder.flip(position):position,new int[]{0xffeeeed2,0xff769656});
         final float[] corners=new float[8];stage.addView(new View(this){protected void onDraw(Canvas c){c.drawColor(0xff17212e);Matrix m=new Matrix();m.setPolyToPoly(new float[]{0,0,640,0,640,640,0,640},0,corners,0,4);c.drawBitmap(board,m,new Paint(3));}});
         CameraBoardView camera=new CameraBoardView(this);stage.addView(camera);
-        stage.post(()->{float w=stage.getWidth(),h=stage.getHeight();float[] q={45,40,w-35,65,w-55,h-65,30,h-45};System.arraycopy(q,0,corners,0,8);stage.getChildAt(0).invalidate();camera.setEditing(false);camera.setTrackedCorners(q);camera.setMoves(Collections.singletonList(new StockfishEngine.Pv(move,38,false)),side);});
+        stage.post(()->{float w=stage.getWidth(),h=stage.getHeight();float[] q={45,40,w-35,65,w-55,h-65,30,h-45};System.arraycopy(q,0,corners,0,8);stage.getChildAt(0).invalidate();camera.setEditing(false);camera.setTrackedCorners(q);camera.setMoves(Collections.singletonList(new StockfishEngine.Pv(move,38,false)),side);
+            camera.trackingLost();Bitmap hidden=Bitmap.createBitmap(camera.getWidth(),camera.getHeight(),Bitmap.Config.ARGB_8888);camera.draw(new Canvas(hidden));int[] pixels=new int[hidden.getWidth()*hidden.getHeight()];hidden.getPixels(pixels,0,hidden.getWidth(),0,0,hidden.getWidth(),hidden.getHeight());for(int pixel:pixels)if(pixel!=0)throw new AssertionError("lost camera retains a visible frame or arrow");hidden.recycle();
+            try(java.io.FileWriter out=new java.io.FileWriter(new java.io.File(getFilesDir(),"camera-hint-state-"+(black?"b":"w")+".txt"))){out.write("CAMERA_LOST_FRAME_OK");}catch(java.io.IOException e){throw new RuntimeException(e);}
+            camera.setTrackedCorners(q);camera.setMoves(Collections.singletonList(new StockfishEngine.Pv(move,38,false)),side);});
     }
 }

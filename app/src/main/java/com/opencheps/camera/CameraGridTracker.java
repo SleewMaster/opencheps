@@ -14,7 +14,7 @@ public final class CameraGridTracker {
     public Result update(BoardMotionTracker.Frame frame,float[] approximate){
         if(last!=null){
             BoardMotionTracker.Result tracked=motion.update(frame,last);
-            if(tracked!=null){
+            if(tracked!=null&&BoardGridLocator.matchesGrid(frame,tracked.corners)){
                 last=tracked.corners.clone();
                 return new Result(last.clone(),tracked.readable()&&sharp(frame,last),false);
             }

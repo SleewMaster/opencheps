@@ -21,4 +21,5 @@ public class LegalVisionTest {
  @Test public void visualUnchanged(){ChessPosition p=initial();assertEquals(0,VisualMoveTracker.match(p,costs(p.board)).plies);}
  @Test public void visualAmbiguityRejected(){ChessPosition p=initial();float[][] c=new float[64][13];for(float[] row:c)java.util.Arrays.fill(row,.2f);assertNull(VisualMoveTracker.match(p,c));}
  @Test public void visualImpossibleTeleportRejected(){ChessPosition p=initial();char[][] bad=ChessPosition.copy(p.board);bad[6][4]='.';bad[3][4]='P';assertNull(VisualMoveTracker.match(p,costs(bad)));}
+ @Test public void quietIntermediateFollowedByCaptureDoesNotFreezeOldBoard(){ChessPosition p=fen("rnbqkbnr/pppppppp/8/8/5B2/8/PPPPPPPP/RN1QKBNR b KQkq -"),first=play(p,"d7d6"),last=play(first,"f4d6");float[][] c=costs(last.board);for(float[] cell:c)for(int i=0;i<cell.length;i++)if(cell[i]>.1f)cell[i]=.2f;for(int i=0;i<64;i++)if(p.board[i/8][i%8]!=last.board[i/8][i%8])c[i][VisualMoveTracker.PIECES.indexOf(p.board[i/8][i%8])]=.04f;VisualMoveTracker.Match m=VisualMoveTracker.match(p,c);assertNotNull(m);assertEquals(2,m.plies);assertEquals("d7d6",m.intermediate.move);assertEquals("f4d6",m.position.move);}
 }

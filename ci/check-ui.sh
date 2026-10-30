@@ -114,7 +114,7 @@ echo "$result"
 adb exec-out screencap -p > ui-proof/vision.png
 
 adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraVisionTestActivity
-for attempt in $(seq 1 300); do
+for attempt in $(seq 1 600); do
  result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-vision-result.txt 2>/dev/null || true)
  if [[ "$result" == CAMERA_VISION_OK* ]]; then break; fi
  if [[ "$result" == CAMERA_VISION_FAIL* ]]; then
@@ -123,7 +123,7 @@ for attempt in $(seq 1 300); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36 SMALL_RECOVERY_OK 12 START_BLACK_OK 8 ALTERNATIVE_OK 8" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 
@@ -225,6 +225,22 @@ python3 - <<'PYUI'
 import xml.etree.ElementTree as E,re,subprocess
 nodes=list(E.parse('ui-proof/calibrating.xml').iter('node'))
 assert any(n.get('text')=='Углы заново' for n in nodes),'camera Start did not apply corners'
+playing=next(n for n in nodes if n.get('text','').startswith('Играю:'))
+orientation=next(n.get('text') for n in nodes if n.get('text','').startswith('Снизу:'))
+import json
+with open('ui-proof/camera-side-before.json','w') as f:json.dump({'playing':playing.get('text'),'orientation':orientation},f)
+x1,y1,x2,y2=map(int,re.findall(r'\d+',playing.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYUI
+adb shell uiautomator dump /sdcard/camera-side.xml
+adb pull /sdcard/camera-side.xml ui-proof/camera-side.xml
+python3 - <<'PYUI'
+import xml.etree.ElementTree as E,re,subprocess,json
+nodes=list(E.parse('ui-proof/camera-side.xml').iter('node'))
+before=json.load(open('ui-proof/camera-side-before.json'))
+assert any(n.get('text','').startswith('Играю:') and n.get('text')!=before['playing'] for n in nodes),'playing side did not change'
+assert any(n.get('text')==before['orientation'] for n in nodes),'playing side rotated board'
+assert any(n.get('text')=='Углы заново' for n in nodes),'playing side reset camera session'
+print('CAMERA_PLAYING_SIDE_OK independent from board orientation, session retained')
 b=next(n for n in nodes if n.get('text')=='Закрыть');x1,y1,x2,y2=map(int,re.findall(r'\d+',b.attrib['bounds']));subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
 PYUI
 adb shell uiautomator dump /sdcard/camera-closed.xml
@@ -239,6 +255,9 @@ PYUI
 for side in w b; do
  adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraHintPreviewActivity --es side "$side"
  sleep 1
+ state=$(adb shell run-as com.opencheps.bottrainer cat files/camera-hint-state-"$side".txt)
+ [[ "$state" == "CAMERA_LOST_FRAME_OK" ]] || { echo "Lost camera frame still visible: $state"; exit 1; }
+ echo "$state $side"
  adb shell uiautomator dump /sdcard/camera-hint.xml
  adb pull /sdcard/camera-hint.xml "ui-proof/camera-hint-$side.xml"
  adb exec-out screencap -p > "ui-proof/camera-hint-$side.png"

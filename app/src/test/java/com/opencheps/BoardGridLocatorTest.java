@@ -27,4 +27,8 @@ public class BoardGridLocatorTest {
     @Test public void uniformFrameRejected(){assertNull(BoardGridLocator.locate(new BoardMotionTracker.Frame(W,H,new float[W*H]),ROUGH));}
     @Test public void stripesRejected(){float[] p=new float[W*H];for(int y=0;y<H;y++)for(int x=0;x<W;x++)p[y*W+x]=((x/42)&1)==0?220:100;assertNull(BoardGridLocator.locate(new BoardMotionTracker.Frame(W,H,p),ROUGH));}
     @Test public void recoverySearchIncludesBoardOutsideOldCrop(){float[] shifted=TRUE.clone();for(int i=0;i<4;i++){shifted[2*i]-=28;shifted[2*i+1]-=20;}check(BoardGridLocator.locateExpanded(scene(false,true,0),shifted));}
+    private BoardMotionTracker.Frame smallScene(){BoardMotionTracker.Frame large=scene(false,true,0);float[] p=new float[W*H];for(int y=0;y<H;y++)for(int x=0;x<W;x++)p[y*W+x]=large.at((x-80)/.65,(y-80)/.65);return new BoardMotionTracker.Frame(W,H,p);}
+    @Test public void wholePreviewIncludesSmallHandheldMonitorBoard(){float[] result=BoardGridLocator.locate(smallScene(),new float[]{2,2,W-3,2,W-3,H-3,2,H-3});assertNotNull(result);for(int i=0;i<8;i++)assertEquals(TRUE[i]*.65f+80,result[i],3);}
+    @Test public void smallBoardRecoversBeyondStaleFrame(){float[] old=TRUE.clone();for(int i=0;i<4;i++){old[2*i]=TRUE[2*i]*.65f+25;old[2*i+1]=TRUE[2*i+1]*.65f+45;}CameraGridTracker.Result result=new CameraGridTracker().update(smallScene(),old);assertNotNull(result);assertTrue(result.readable);for(int i=0;i<8;i++)assertEquals(TRUE[i]*.65f+80,result.corners[i],3);}
+    @Test public void opticalGridMustStillMatchCurrentFrame(){assertTrue(BoardGridLocator.matchesGrid(scene(false,false,0),TRUE));float[] drift=TRUE.clone();for(int i=0;i<4;i++)drift[2*i]+=44;assertFalse(BoardGridLocator.matchesGrid(scene(false,false,0),drift));}
 }

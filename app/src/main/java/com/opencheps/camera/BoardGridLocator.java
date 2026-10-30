@@ -83,7 +83,9 @@ public final class BoardGridLocator {
             }response[i]=total/count;
         }
         java.util.List<double[]> candidates=new java.util.ArrayList<>();
-        for(double spacing=23;spacing<=44;spacing+=.25)for(double start=0;start<=112;start+=.5){
+        // A handheld monitor board can occupy only half the preview. The old
+        // minimum (23*8/320) silently excluded it from whole-preview recovery.
+        for(double spacing=14;spacing<=44;spacing+=.25)for(double start=0;start+8*spacing<=S+1;start+=.5){
             if(start+8*spacing>S+1)continue;
             double sum=0;for(int i=1;i<8;i++){
                 int at=(int)Math.round(start+i*spacing);double value=0;
@@ -114,6 +116,10 @@ public final class BoardGridLocator {
         return Math.abs(total/count);
     }
     private static double clamp(double value){return Math.max(-45,Math.min(45,value));}
+    /** Verify optical registration against this frame, not just old image patches. */
+    public static boolean matchesGrid(BoardMotionTracker.Frame frame,float[] corners){
+        return corners!=null&&corners.length==8&&checkerMatches(frame,corners)>=61&&score(frame,corners)>=7;
+    }
     private static int checkerMatches(BoardMotionTracker.Frame image,float[] q){
         double[] h=homography(q);if(h==null)return 0;
         double[] average=new double[2];int[] n=new int[2];double[][] values=new double[8][8];
