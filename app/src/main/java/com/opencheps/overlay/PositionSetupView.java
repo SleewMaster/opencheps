@@ -31,7 +31,7 @@ public final class PositionSetupView extends ScrollView {
         for(char piece:".PNBRQK".toCharArray())pieceButton(palette,piece);
         palette=row(body);for(char piece:".pnbrqk".toCharArray())pieceButton(palette,piece);
         bottom=button(body,"",()->{this.perspective=ChessPosition.opposite(this.perspective);refresh();});
-        text(body,"Чей ход сейчас?",15,0xffeaf2ff);LinearLayout turns=row(body);
+        text(body,"Выбери, чей сейчас ход. После этого можно подтвердить позицию.",15,0xffeaf2ff);LinearLayout turns=row(body);
         white=button(turns,"Ход белых",()->{this.turn=Side.WHITE;refresh();});black=button(turns,"Ход чёрных",()->{this.turn=Side.BLACK;refresh();});
         text(body,"Рокировки ещё разрешены? Отметь только известные права. По расположению фигур их определить нельзя.",12,0xffa4b7d1);
         LinearLayout castles=row(body);int index=0;for(String title:new String[]{"Б. O-O","Б. O-O-O","Ч. O-O","Ч. O-O-O"}){

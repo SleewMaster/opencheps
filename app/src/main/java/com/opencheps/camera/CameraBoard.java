@@ -25,8 +25,9 @@ public final class CameraBoard {
     private final int[] boardPixels=new int[SIZE*SIZE];
     private Side perspective;
     private final java.util.List<PieceTemplates> banks;
-    private final FrameConsensus reviewConsensus=new FrameConsensus();
+    private final DiagramConsensus reviewConsensus=new DiagramConsensus();
     private volatile boolean reviewRequested;
+    private volatile boolean reviewRestart;
     private boolean autoReviewOff;
     private Review pendingReview;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
@@ -46,8 +47,8 @@ public final class CameraBoard {
         private final int[] pixels;
         Review(DiagramReader.Result d,Side side,PieceTemplates bank,float[][] features,int[] pixels){diagram=d;perspective=side;this.bank=bank;this.features=features;this.pixels=pixels;}
     }
-    public void requestReview(){reviewRequested=true;autoReviewOff=false;}
-    public void cancelReview(){reviewRequested=false;autoReviewOff=true;pendingReview=null;reviewConsensus.accept(null);}
+    public void requestReview(){reviewRestart=true;reviewRequested=true;autoReviewOff=false;}
+    public void cancelReview(){reviewRequested=false;autoReviewOff=true;pendingReview=null;reviewConsensus.reset();}
     /** Called on the vision executor after explicit review; a fresh frame must still verify it. */
     public void applyReview(Review review,PositionSeed seed){
         if(seed==null||seed.error()!=null)throw new IllegalArgumentException("Invalid reviewed position");
@@ -75,8 +76,7 @@ public final class CameraBoard {
         PieceClassifier pointReader=new PieceClassifier();pointReader.useTemplates(selected.exportTemplates(),perspective);
         DiagramReader.Result point=DiagramReader.read(pointReader.labelCosts(square,bounds));
         for(int i=0;i<64;i++)if(point==null||point.screen[i/8][i%8]!=best.screen[i/8][i%8])best.uncertain[i]=true;
-        String key=java.util.Arrays.deepToString(best.screen);
-        if(!reviewConsensus.accept(key)){problem="Читаю текущую позицию · удерживай доску в кадре";return null;}
+        if(!reviewConsensus.accept(best)){problem="Сканирую позицию · кадр "+reviewConsensus.frames()+" из "+DiagramConsensus.MAX_FRAMES+". Сомнительные клетки покажу для проверки.";return null;}
         int[] pixels=new int[SIZE*SIZE];square.getPixels(pixels,0,SIZE,0,0,SIZE,SIZE);
         return new Review(best,perspective,selected.exportTemplates(),selected.snapshotFeatures(square,bounds),pixels);
     }
@@ -103,7 +103,7 @@ public final class CameraBoard {
         BoardMotionTracker.Frame gray=BoardMotionTracker.Frame.fromArgb(cameraPixels,w,h,480);
         float sx=gray.width/(float)w,sy=gray.height/(float)h;
         float[] scaled=corners.clone();for(int i=0;i<4;i++){scaled[i*2]*=sx;scaled[i*2+1]*=sy;}
-        if(reframe){reframe=false;geometry.reset();consensus.accept(null);}
+        if(reframe){reframe=false;geometry.reset();consensus.accept(null);reviewConsensus.reset();}
         CameraGridTracker.Result tracked=geometry.update(gray,scaled);
         if(tracked==null){reviewConsensus.accept(null);consensus.accept(null);return new FrameResult(null,null,false,false,false,"Не вижу всю сетку · держи все 64 клетки внутри изображения камеры.");}
         float[] real=tracked.corners.clone();for(int i=0;i<4;i++){real[i*2]/=sx;real[i*2+1]/=sy;}
@@ -136,6 +136,7 @@ public final class CameraBoard {
         pendingChange=false;
         covered=false;
         problem="";
+        if(reviewRestart){reviewRestart=false;reviewConsensus.reset();}
         if(reviewRequested){pendingReview=readReview(rectified);return null;}
         if(!classifier.isTrained()) {
             if(!classifier.tryBootstrap(rectified,bounds)){if(!autoReviewOff)pendingReview=readReview(rectified);else problem="Нажми «Позиция», чтобы начать с текущей расстановки.";return null;}

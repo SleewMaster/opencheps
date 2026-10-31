@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, bot-vision-fix ]
+    branches: [ main, bot-vision-fix, camera-scan-016 ]
   workflow_dispatch:
 
 concurrency:

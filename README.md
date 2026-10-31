@@ -91,3 +91,10 @@ App package: `com.opencheps.bottrainer`. Camera mode does not run concurrently w
 ## License
 
 App code: MIT; preserve `LICENSE`. Bundled Stockfish: GPL-3.0, see [the full license](licenses/Stockfish-Copying.txt) and [third-party notices](release/v0.12.0/THIRD_PARTY_NOTICES.txt). Source: https://github.com/official-stockfish/Stockfish/tree/sf_18 . The original MIT attribution remains in LICENSE.
+
+
+## Camera scan fix in 0.16.0
+
+Camera position review no longer waits for two exactly identical 64-square OCR strings. Two nearby readings open the editor; a changing scan opens it after at most five readable grid observations. Every cell whose label changed is marked uncertain. One dropped camera frame is tolerated; loss of geometry resets the scan. The proposal, piece descriptors, and background always come from the same latest frame. Starting another review or reframing clears the previous scan.
+
+This changes review acquisition only. The user still verifies the pieces and explicitly chooses the side to move. Fresh-frame verification, legal move matching, and the one-advice-per-turn gate remain enabled. A progress message distinguishes position scanning from normal move recognition. New unit tests cover alternating glyphs, broad disagreement, interrupted frames, and reset. Android camera regression tests include a midgame glyph alternating on every frame, correction/acceptance, and preserved history for both orientations and two board themes.

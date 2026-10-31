@@ -193,7 +193,7 @@ public class CameraActivity extends AppCompatActivity {
                 if(answer==null||observation.history==null){
                     boolean hardLoss=observation==null||!observation.tracked||!observation.readable;
                     boolean hold=adviceGuard.failure(SystemClock.uptimeMillis(),!hardLoss,!hardLoss,observation!=null&&observation.pendingChange);
-                    String message=observation==null||!observation.tracked?"Ищу доску…":!observation.readable?"Кадр не подтверждён":"Проверяю фигуры…";
+                    String message=observation==null||!observation.tracked?"Ищу доску…":!observation.readable?"Кадр не подтверждён":observation.problem.startsWith("Сканирую")?"Снимаю текущую позицию…":"Проверяю фигуры…";
                     suspendAdvice(!hold,message);
                     status.setText(observation!=null&&!observation.problem.isEmpty()?observation.problem:"Жду чёткий кадр доски");return;
                 }

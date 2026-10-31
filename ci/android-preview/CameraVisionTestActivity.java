@@ -9,10 +9,10 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK","NOISY_SCAN_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake,this::checkNoisyScan};
             String[] completed=new String[checks.length];
-            for(int i:new int[]{10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
+            for(int i:new int[]{11,10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
             if(failures.length()==0)for(String entry:completed){if(success.length()>0)success.append(' ');success.append(entry);}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -275,6 +275,30 @@ public class CameraVisionTestActivity extends Activity {
             ownRaw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?after.board:FenBuilder.flip(after.board),THEMES[theme]);ownShot=photograph(ownRaw,corners,true);seen=awaitBoard(session,ownShot,corners);
             if(seen.position==null||!gate.observe(seen.history,Side.BLACK)||gate.choose(seen.history,after.successors().get(0).move)==null)throw new AssertionError("normal turn handshake failed");
             ownRaw.recycle();ownShot.recycle();base.recycle();baseShot.recycle();raw.recycle();shot.recycle();passed++;
+        }return passed;
+    }
+    /** A glyph alternates every observation: the old exact-64 key never completes. */
+    private int checkNoisyScan(){int passed=0;PieceTemplates bank=openingBank();
+        float[] corners={120,80,660,140,700,720,60,760};
+        for(int theme:new int[]{0,2})for(Side side:new Side[]{Side.WHITE,Side.BLACK}){
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));
+            session.requestReview();CameraBoard.FrameResult seen=null;Bitmap raw=null,shot=null;PositionSeed seed=null;
+            for(int n=0;n<DiagramConsensus.MAX_FRAMES;n++){
+                if(raw!=null){raw.recycle();shot.recycle();}
+                String fen=n%2==0?"4k3/pp3ppp/2n1b3/3pP3/8/2N2N2/PP3PPP/4K2R b - - 7 20":"4k3/pp3ppp/2b1b3/3pP3/8/2N2N2/PP3PPP/4K2R b - - 7 20";
+                seed=PositionSeed.parse(fen,side);
+                raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board),THEMES[theme]);
+                shot=photograph(raw,shaken(corners,n),true);seen=session.readFrame(shot,corners);
+                if(seen.position!=null||seen.history!=null)throw new AssertionError("unreviewed scan produced a position");
+                if(seen.review!=null)break;
+            }
+            if(seen==null||seen.review==null)throw new AssertionError("noisy scan never opened the editor: "+(seen==null?"null":seen.problem));
+            int square=side==Side.WHITE?18:45;
+            if(!seen.review.diagram.uncertain[square])throw new AssertionError("flickering glyph was not marked for review");
+            session.applyReview(seen.review,seed);
+            CameraBoard.FrameResult verified=awaitBoard(session,shot,corners);
+            if(verified.position==null||verified.history.plies!=0||!java.util.Arrays.deepEquals(verified.position.board,seed.position.board))throw new AssertionError("noisy reviewed snapshot could not be accepted: "+verified.problem);
+            raw.recycle();shot.recycle();passed++;
         }return passed;
     }
     private void invalidateOpticalFeatures(CameraBoard session){try{
