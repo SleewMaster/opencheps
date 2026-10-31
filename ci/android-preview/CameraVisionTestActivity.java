@@ -9,10 +9,10 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK","NOISY_SCAN_OK","FAST_REPLY_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake,this::checkNoisyScan,this::checkFastReply};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK","NOISY_SCAN_OK","FAST_REPLY_OK","AUTO_FIRST_OK","BANK_RECOVERY_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake,this::checkNoisyScan,this::checkFastReply,this::checkAutoFirst,this::checkBankRecovery};
             String[] completed=new String[checks.length];
-            for(int i:new int[]{12,11,10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
+            for(int i:new int[]{13,14,12,11,10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
             if(failures.length()==0)for(String entry:completed){if(success.length()>0)success.append(' ');success.append(entry);}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -232,8 +232,8 @@ public class CameraVisionTestActivity extends Activity {
             CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));ChessPosition initial=CameraOpening.initial(),expected=advance(initial,first);Bitmap raw,shot;
             if(!late){raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?initial.board:FenBuilder.flip(initial.board),THEMES[0]);shot=photograph(raw,corners,true);if(awaitBoard(session,shot,corners).position==null)throw new AssertionError("black initial calibration");raw.recycle();shot.recycle();}
             raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells(first,side));shot=photograph(raw,corners,true);
-            if(late){CameraBoard.FrameResult review=null;for(int n=0;n<4;n++){review=session.readFrame(shot,corners);if(review.position!=null)throw new AssertionError("late black start invented opening history");if(review.review!=null)break;}if(review.review==null)throw new AssertionError("late black review missing "+review.problem);session.applyReview(review.review,PositionSeed.parse(CameraBoard.fen(expected),side));}
-            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);int firstPly=late?0:1;
+            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);int firstPly=1;
+            if(seen.review!=null)throw new AssertionError("first white move demanded manual review");
             if(seen.position==null||seen.position.turn!=Side.BLACK||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=firstPly){save(shot,"camera-photo.png");throw new AssertionError("black first-move join "+first+" "+side+" late="+late+" "+seen.problem);}
             raw.recycle();shot.recycle();expected=advance(expected,"e7e5");raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?expected.board:FenBuilder.flip(expected.board),THEMES[0],moveCells("e7e5",side));shot=photograph(raw,shaken(corners,1),true);seen=awaitBoard(session,shot,corners);
             if(seen.position==null||seen.history.plies!=firstPly+1||seen.position.turn!=Side.WHITE||!java.util.Arrays.deepEquals(seen.position.board,expected.board))throw new AssertionError("black reply was not observed "+first+" "+side+" late="+late+" "+seen.problem);
@@ -275,6 +275,36 @@ public class CameraVisionTestActivity extends Activity {
             ownRaw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?after.board:FenBuilder.flip(after.board),THEMES[theme]);ownShot=photograph(ownRaw,corners,true);seen=awaitBoard(session,ownShot,corners);
             if(seen.position==null||!gate.observe(seen.history,Side.BLACK)||gate.choose(seen.history,after.successors().get(0).move)==null)throw new AssertionError("normal turn handshake failed");
             ownRaw.recycle();ownShot.recycle();base.recycle();baseShot.recycle();raw.recycle();shot.recycle();passed++;
+        }return passed;
+    }
+    private int checkAutoFirst(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
+        for(ChessPosition first:CameraOpening.initial().successors())for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int theme:new int[]{0,2}){
+            CameraBoard session=new CameraBoard(ChessPosition.opposite(side),java.util.Collections.singletonList(bank));
+            Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?first.board:FenBuilder.flip(first.board),THEMES[theme],moveCells(first.move,side)),shot=photograph(raw,corners,true);
+            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);
+            if(seen.review!=null||seen.position==null||seen.position.turn!=Side.BLACK||seen.history.plies!=1||seen.perspective!=side||!seen.history.command.endsWith(" moves "+first.move)||!java.util.Arrays.deepEquals(first.board,seen.position.board))throw new AssertionError("auto first white move "+first.move+" "+side+" "+theme+" "+seen.problem);
+            CameraTurnGate gate=new CameraTurnGate();String answer=first.successors().get(0).move;
+            if(!gate.observe(seen.history,Side.BLACK)||!answer.equals(gate.choose(seen.history,answer)))throw new AssertionError("black answer not enabled automatically");
+            raw.recycle();shot.recycle();ChessPosition reply=advance(first,"e7e5");
+            raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?reply.board:FenBuilder.flip(reply.board),THEMES[theme]);Bitmap shot2=photograph(raw,shaken(corners,1),true);
+            seen=awaitBoard(session,shot2,corners);
+            if(seen.position==null||seen.history.plies!=2||seen.position.turn!=Side.WHITE)throw new AssertionError("auto opening continuation "+first.move+" "+seen.problem);
+            raw.recycle();shot2.recycle();passed++;
+        }return passed;
+    }
+    private int checkBankRecovery(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
+        for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int theme:new int[]{0,2}){
+            PositionSeed seed=PositionSeed.parse("r1bqkb1r/ppp2ppp/3p1n2/4p3/2BnP3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 6",side);
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));session.requestReview();
+            Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board),THEMES[theme]),shot=photograph(raw,corners,true);
+            CameraBoard.FrameResult review=null;for(int n=0;n<5;n++){review=session.readFrame(shot,corners);if(review.review!=null)break;}if(review.review==null)throw new AssertionError("bank recovery review");session.applyReview(review.review,seed);
+            CameraBoard.FrameResult seen=awaitBoard(session,shot,corners);if(seen.position==null)throw new AssertionError("bank recovery seed");String anchor=seen.history.command;long game=seen.history.gameId;
+            // Simulate unusable learned descriptors while retaining the valid offline backup.
+            try{java.lang.reflect.Field field=CameraBoard.class.getDeclaredField("classifier");field.setAccessible(true);PieceClassifier classifier=(PieceClassifier)field.get(session);java.util.List<PieceTemplates.Entry> broken=new java.util.ArrayList<>();for(PieceTemplates.Entry e:bank.entries){float[] unusable=new float[e.feature.length];java.util.Arrays.fill(unusable,Float.NaN);broken.add(new PieceTemplates.Entry(e.piece,unusable));};classifier.useTemplates(new PieceTemplates(broken),side);}catch(ReflectiveOperationException e){throw new AssertionError(e);}
+            raw.recycle();shot.recycle();ChessPosition castled=advance(seed.position,"e1g1");raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?castled.board:FenBuilder.flip(castled.board),THEMES[theme]);Bitmap shot2=photograph(raw,shaken(corners,2),true);
+            seen=null;for(int n=0;n<8;n++){seen=session.readFrame(shot2,corners);if(seen.position!=null)break;}
+            if(seen.position==null||seen.review!=null||seen.history.gameId!=game||seen.history.plies!=1||!seen.history.command.equals(anchor+" moves e1g1")||!java.util.Arrays.deepEquals(seen.position.board,castled.board))throw new AssertionError("backup bank failed to recover castle without losing history "+side+" "+theme+" "+seen.problem);
+            raw.recycle();shot2.recycle();passed++;
         }return passed;
     }
     /** Full CameraBoard -> confirmed history -> turn gate for a fast reply.

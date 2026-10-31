@@ -3,7 +3,7 @@ package com.opencheps.camera;
 import com.opencheps.util.Side;
 import com.opencheps.vision.*;
 
-/** Known standard opening used only after initial-position calibration. */
+/** Known initial position, also used to prove the first white move from a camera frame. */
 public final class CameraOpening {
     private CameraOpening() {}
     public static ChessPosition initial(){

@@ -5,8 +5,10 @@ import java.util.Arrays;
 /** Checks visibility of cell background corners, independently of piece recognition. */
 public final class CameraBackground {
     private final float[][] reference;
+    private final float[][] observed;
     public CameraBackground(int[] pixels,int width,int height){
         reference=sample(pixels,width,height);
+        observed=new float[reference.length][];for(int i=0;i<reference.length;i++)observed[i]=reference[i].clone();
         // Joining a running game captures last-move/check highlights too. They are
         // transient paint, not the board background: otherwise their disappearance
         // plus the next two highlights looks like four or more covered cells.
@@ -27,16 +29,22 @@ public final class CameraBackground {
     public boolean visible(int[] pixels,int width,int height){
         float[][] current=sample(pixels,width,height);float[] offset=new float[3];
         for(int channel=0;channel<3;channel++){
-            float[] differences=new float[256];for(int i=0;i<256;i++)differences[i]=current[i][channel]-reference[i][channel];
+            float[] differences=new float[256];for(int i=0;i<256;i++)differences[i]=current[i][channel]-observed[i][channel];
             Arrays.sort(differences);offset[channel]=(differences[127]+differences[128])/2;
         }
         int badCells=0;
         for(int cell=0;cell<64;cell++){
             int badCorners=0;
             for(int corner=0;corner<4;corner++){
-                int i=cell*4+corner;float error=0;
-                for(int c=0;c<3;c++)error=Math.max(error,Math.abs(current[i][c]-reference[i][c]-offset[c]));
-                if(error>42)badCorners++;
+                int i=cell*4+corner;float plainError=0,observedError=0;
+                for(int c=0;c<3;c++){
+                    plainError=Math.max(plainError,Math.abs(current[i][c]-reference[i][c]-offset[c]));
+                    observedError=Math.max(observedError,Math.abs(current[i][c]-observed[i][c]-offset[c]));
+                }
+                // The original appearance must verify itself, even when several
+                // cells contain highlights or a stable monitor lighting gradient.
+                // Also allow the estimated plain color when a highlight disappears.
+                if(Math.min(plainError,observedError)>42)badCorners++;
             }
             // Two last-move squares plus a checked king may legitimately change colour.
             if(badCorners>=2&&++badCells>3)return false;

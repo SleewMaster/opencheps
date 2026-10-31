@@ -91,7 +91,7 @@ public class CameraActivity extends AppCompatActivity {
         Button back=button("‹ Назад");top.addView(back,new LinearLayout.LayoutParams(dp(90),dp(48)));back.setOnClickListener(v->finish());
         TextView title=text("КАМЕРА  /  LIVE",14,0xffb9f66e);title.setGravity(Gravity.CENTER);top.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));
         Button close=button("Закрыть");top.addView(close,new LinearLayout.LayoutParams(dp(86),dp(48)));close.setOnClickListener(v->finish());
-        TextView help=text("Держи все 64 клетки внутри изображения камеры и нажми «Начать». Можно начать с любой позиции: проверь фигуры и чей ход.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
+        TextView help=text("Покажи всю доску и нажми «Начать». Начальную позицию и первый ход белых определю автоматически. В середине партии проверь фигуры и очередь хода.",12,0xff93a8c3);help.setPadding(0,dp(4),0,dp(8));root.addView(help);
         FrameLayout stage=new FrameLayout(this);root.addView(stage,new LinearLayout.LayoutParams(-1,0,1));
         preview=new PreviewView(this);preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);preview.setScaleType(PreviewView.ScaleType.FIT_CENTER);stage.addView(preview,new FrameLayout.LayoutParams(-1,-1));
         boardView=new CameraBoardView(this);stage.addView(boardView,new FrameLayout.LayoutParams(-1,-1));
@@ -188,6 +188,7 @@ public class CameraActivity extends AppCompatActivity {
             CameraBoard.FrameResult observation=result;main.post(()->{processing=false;if(!active||destroyed||token!=generation||paused||session!=board)return;
                 if(observation==null||!observation.tracked)boardView.trackingLost();
                 else if(observation.corners!=null)boardView.setTrackedCorners(observation.corners);
+                if(observation!=null&&observation.perspective!=null&&perspective!=observation.perspective){perspective=observation.perspective;orientation.setText(perspective==Side.WHITE?"Снизу: белые":"Снизу: чёрные");}
                 if(observation!=null&&observation.review!=null){openReview(session,observation.review);return;}
                 ChessPosition answer=observation==null?null:observation.position;
                 if(answer==null||observation.history==null){
