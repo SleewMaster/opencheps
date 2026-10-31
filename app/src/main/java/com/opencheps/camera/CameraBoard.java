@@ -164,7 +164,7 @@ public final class CameraBoard {
         unreadPositions=0;
         pendingChange=match.plies>0;
         String key=fen(match.position);
-        if(!consensus.accept(key)){problem="Доска найдена · подтверждаю положение фигур";return null;}
+        if(!consensus.accept(key,match.plies==2?3:2)){problem=match.plies==2?"Вижу твой ход и ответ соперника · сверяю доску":"Доска найдена · подтверждаю положение фигур";return null;}
         seedNeedsVerification=false;
         if(match.plies==2)history.advance(match.intermediate,match.position);
         else if(match.plies==1)history.advance(match.position);

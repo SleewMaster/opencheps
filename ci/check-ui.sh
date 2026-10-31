@@ -123,7 +123,7 @@ for attempt in $(seq 1 600); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36 SMALL_RECOVERY_OK 12 START_BLACK_OK 16 ALTERNATIVE_OK 8 TURN_HANDSHAKE_OK 4 NOISY_SCAN_OK 4" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36 SMALL_RECOVERY_OK 12 START_BLACK_OK 16 ALTERNATIVE_OK 8 TURN_HANDSHAKE_OK 4 NOISY_SCAN_OK 4 FAST_REPLY_OK 16" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 

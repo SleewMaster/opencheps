@@ -207,6 +207,7 @@ public class CameraActivity extends AppCompatActivity {
                     updateRepeat();
                 }
                 if(turnGate.requiresReview()){invalidateAdvice();status.setText("Не подтверждена смена очереди · нажми «Позиция» и выбери чей ход.");moveLabel.setText("Проверь очередь хода");return;}
+                if(turnGate.waitingForConfirmation()){status.setText("Твой ход и ответ соперника распознаны · сверяю следующий кадр");moveLabel.setText("Подтверждаю ответ соперника…");return;}
                 if(answer.turn!=userSide){status.setText(withFeedback("Жду ход соперника · доска распознана"));return;}
                 List<StockfishEngine.Pv> cached=adviceCache.get(verifiedSearch.key);
                 if(cached!=null){render(cached,fen,generation,true);return;}

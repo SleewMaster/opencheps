@@ -6,9 +6,12 @@ public final class FrameConsensus {
     private int repeats;
     private int gaps;
     public boolean accept(String key) {
+        return accept(key,2);
+    }
+    public boolean accept(String key,int required) {
         if(key==null){if(++gaps>1){candidate=null;repeats=0;}return false;}
         gaps=0;
         if(key.equals(candidate))repeats++;else{candidate=key;repeats=1;}
-        return repeats>=2;
+        return repeats>=Math.max(2,required);
     }
 }
