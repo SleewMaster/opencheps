@@ -9,10 +9,10 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake};
             String[] completed=new String[checks.length];
-            for(int i:new int[]{7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
+            for(int i:new int[]{10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
             if(failures.length()==0)for(String entry:completed){if(success.length()>0)success.append(' ');success.append(entry);}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -252,6 +252,29 @@ public class CameraVisionTestActivity extends Activity {
             if(seen.position==null||!java.util.Arrays.deepEquals(seen.position.board,expected.board)||seen.history.plies!=(missedReply?3:2)||seen.history.key.equals(old)||!seen.history.command.endsWith(" moves e2e4 d7d6"+(missedReply?" g1f3":"")))throw new AssertionError("played alternative ignored "+theme+" "+side+" "+missedReply+" "+seen.problem);
             if(!"Сыграно d7 → d6 вместо d7 → d5".equals(feedback.observed(seen.history)))throw new AssertionError("alternative feedback missing");
             raw.recycle();shot.recycle();passed++;
+        }return passed;
+    }
+    private int checkTurnHandshake(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
+        String fen="r3k2r/ppp2ppp/2n1bn2/3p4/3P4/2N1PN2/PPP2PPP/R1BQ1RK1 b kq - 2 9";
+        for(int theme:new int[]{0,2})for(Side side:new Side[]{Side.WHITE,Side.BLACK}){
+            PositionSeed seed=PositionSeed.parse(fen,side);if(seed==null)throw new AssertionError("handshake fixture");CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));
+            ChessPosition own=advance(seed.position,"h7h6"),reply=advance(own,"a2a3");
+            Bitmap base=NativeVisionCheck.render(640,640,0,side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board),THEMES[theme]),baseShot=photograph(base,corners,true);
+            CameraBoard.FrameResult review=null;for(int n=0;n<4;n++){review=session.readFrame(baseShot,corners);if(review.review!=null)break;}if(review.review==null)throw new AssertionError("handshake review missing");session.applyReview(review.review,seed);
+            Bitmap raw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?reply.board:FenBuilder.flip(reply.board),THEMES[theme]),shot=photograph(raw,corners,true);
+            for(int n=0;n<4;n++)if(session.readFrame(shot,corners).position!=null||session.historySnapshot().plies!=0)throw new AssertionError("unverified review advanced inferred plies");
+            CameraBoard.FrameResult seen=awaitBoard(session,baseShot,corners);if(seen.position==null||seen.history.plies!=0)throw new AssertionError("review seed did not verify");
+            CameraTurnGate gate=new CameraTurnGate();if(!gate.observe(seen.history,Side.BLACK)||!"h7h6".equals(gate.choose(seen.history,"h7h6")))throw new AssertionError("first black hint blocked");
+            seen=awaitBoard(session,shot,corners);if(seen.position==null||seen.history.plies!=2)throw new AssertionError("handshake skipped move fixture "+seen.problem);
+            if(gate.observe(seen.history,Side.BLACK)||!gate.requiresReview()||gate.choose(seen.history,reply.successors().get(0).move)!=null)throw new AssertionError("two plies unlocked a second black hint");
+            session.requestReview();review=session.readFrame(shot,corners);if(review.review==null)review=session.readFrame(shot,corners);if(review.review==null)throw new AssertionError("handshake re-review missing");session.applyReview(review.review,PositionSeed.parse(CameraBoard.fen(reply),side));seen=awaitBoard(session,shot,corners);
+            if(seen.position==null||!gate.observe(seen.history,Side.BLACK)||!"h6h5".equals(gate.choose(seen.history,"h6h5")))throw new AssertionError("explicit review did not unlock one hint");
+            ChessPosition next=advance(reply,"h6h5"),after=advance(next,"a3a4");
+            Bitmap ownRaw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?next.board:FenBuilder.flip(next.board),THEMES[theme]),ownShot=photograph(ownRaw,corners,true);seen=awaitBoard(session,ownShot,corners);
+            if(seen.position==null||gate.observe(seen.history,Side.BLACK)||gate.requiresReview())throw new AssertionError("opponent turn not observed");ownRaw.recycle();ownShot.recycle();
+            ownRaw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?after.board:FenBuilder.flip(after.board),THEMES[theme]);ownShot=photograph(ownRaw,corners,true);seen=awaitBoard(session,ownShot,corners);
+            if(seen.position==null||!gate.observe(seen.history,Side.BLACK)||gate.choose(seen.history,after.successors().get(0).move)==null)throw new AssertionError("normal turn handshake failed");
+            ownRaw.recycle();ownShot.recycle();base.recycle();baseShot.recycle();raw.recycle();shot.recycle();passed++;
         }return passed;
     }
     private void invalidateOpticalFeatures(CameraBoard session){try{

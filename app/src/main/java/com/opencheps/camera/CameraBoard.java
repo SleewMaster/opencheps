@@ -20,6 +20,7 @@ public final class CameraBoard {
     private int[] cameraPixels;
     private boolean pendingChange;
     private boolean covered;
+    private boolean seedNeedsVerification;
     private CameraBackground background;
     private final int[] boardPixels=new int[SIZE*SIZE];
     private Side perspective;
@@ -53,7 +54,7 @@ public final class CameraBoard {
         perspective=seed.perspective;
         char[][] screen=perspective==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
         classifier.useTemplates(PieceClassifier.withObserved(review.bank,screen,review.features),perspective);
-        position=seed.position;history.reset(seed.fen());confidenceScale=1;unreadPositions=0;
+        position=seed.position;history.reset(seed.fen());confidenceScale=1;unreadPositions=0;seedNeedsVerification=true;
         background=new CameraBackground(review.pixels,SIZE,SIZE);
         consensus.accept(null);consensus.accept(null);cancelReview();
     }
@@ -155,11 +156,15 @@ public final class CameraBoard {
             for(int label=0;label<canonical[i].length;label++)canonical[i][label]*=confidenceScale;
         }
         VisualMoveTracker.Match match=VisualMoveTracker.match(position,canonical);
+        if(seedNeedsVerification&&(match==null||match.plies!=0)){
+            consensus.accept(null);problem="Подтверждённая расстановка не совпала с кадром · нажми «Позиция» и проверь фигуры и чей ход.";return null;
+        }
         if(match==null){consensus.accept(null);if(++unreadPositions%3==0)geometry.reset();problem=unreadPositions>=6?"Позиция не совпала с историей · нажми «Позиция», чтобы продолжить с текущей доски.":"Сетку вижу · проверяю фигуры после хода";return null;}
         unreadPositions=0;
         pendingChange=match.plies>0;
         String key=fen(match.position);
         if(!consensus.accept(key)){problem="Доска найдена · подтверждаю положение фигур";return null;}
+        seedNeedsVerification=false;
         if(match.plies==2)history.advance(match.intermediate,match.position);
         else if(match.plies==1)history.advance(match.position);
         position=match.position;

@@ -14,7 +14,7 @@ public final class PositionSetupView extends ScrollView {
     private Side perspective,turn;
     private int selected=-1,halfmove=0,fullmove=1;
     private final TextView message;
-    private final Button bottom,white,black;
+    private final Button bottom,white,black,confirm;
     private final CheckBox[] rights=new CheckBox[4];
     private final EditText ep,fen;
     private final BoardEditor board;
@@ -48,7 +48,7 @@ public final class PositionSetupView extends ScrollView {
             java.util.Arrays.fill(this.uncertain,false);refresh();
         });
         message=text(body,"После подтверждения проверю доску ещё раз. Если партия продолжается, дождись неподвижной позиции.",12,0xffa4b7d1);
-        button(body,"Подтвердить позицию",()->{
+        confirm=button(body,"Подтвердить позицию",()->{
             StringBuilder r=new StringBuilder();for(int i=0;i<4;i++)if(rights[i].isChecked())r.append("KQkq".charAt(i));
             PositionSeed seed=new PositionSeed(canonical(),this.turn,this.perspective,r.length()==0?"-":r.toString(),ep.getText().toString().trim(),halfmove,fullmove);
             String error=seed.error();if(error!=null){showError(error);return;}apply.accept(seed);
@@ -58,6 +58,7 @@ public final class PositionSetupView extends ScrollView {
     }
     private char[][] canonical(){return perspective==Side.WHITE?screen:FenBuilder.flip(screen);}
     private void refresh(){
+        confirm.setEnabled(turn!=null);
         bottom.setText("Снизу: "+(perspective==Side.WHITE?"белые":"чёрные")+"  ↻");
         white.setTextColor(turn==Side.WHITE?0xff90d44e:0xffa4b7d1);black.setTextColor(turn==Side.BLACK?0xff90d44e:0xffa4b7d1);
         char[][] b=canonical();for(int i=0;i<4;i++){boolean possible=PositionSeed.canHaveRight(b,"KQkq".charAt(i));rights[i].setEnabled(possible);if(!possible)rights[i].setChecked(false);}

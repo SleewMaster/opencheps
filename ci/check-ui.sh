@@ -123,7 +123,7 @@ for attempt in $(seq 1 600); do
  fi
  sleep 1
 done
-[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36 SMALL_RECOVERY_OK 12 START_BLACK_OK 16 ALTERNATIVE_OK 8" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
+[[ "$result" == "CAMERA_VISION_OK 60 SHAKE_OK 30 SNAP_OK 30 RECOVERY_OK 10 JOIN_OK 18 CONTINUE_OK 52 HIGHLIGHT_JOIN_OK 36 SMALL_RECOVERY_OK 12 START_BLACK_OK 16 ALTERNATIVE_OK 8 TURN_HANDSHAKE_OK 4" ]] || { adb logcat -d -s CameraVisionTest:E; echo "Missing camera vision: $result"; exit 1; }
 echo "$result"
 
 
@@ -167,6 +167,16 @@ PYJOIN
  [[ "$result" == SCREEN_JOIN_UI_OK* ]] || { echo "Review not applied: $result"; exit 1; }
  echo "$result"
 done
+
+# Midgame camera review requires an explicit side-to-move choice.
+adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraTurnReviewActivity
+for attempt in $(seq 1 20); do
+ result=$(adb shell run-as com.opencheps.bottrainer cat files/camera-turn-review.txt 2>/dev/null || true)
+ if [[ "$result" == CAMERA_TURN_REVIEW_OK* ]]; then break; fi
+ sleep 0.25
+done
+[[ "$result" == "CAMERA_TURN_REVIEW_OK explicit black turn, no default selection" ]] || { echo "Turn review failed: $result"; exit 1; }
+echo "$result"
 
 # Exercise actual production TTS binding/selection/utterance, using the CI-only engine.
 adb shell settings put secure tts_default_synth com.opencheps.touchprobe
@@ -256,7 +266,7 @@ for side in w b; do
  adb shell am start -W -n com.opencheps.bottrainer/com.opencheps.ui.CameraHintPreviewActivity --es side "$side"
  sleep 1
  state=$(adb shell run-as com.opencheps.bottrainer cat files/camera-hint-state-"$side".txt)
- [[ "$state" == "CAMERA_LOST_FRAME_OK" ]] || { echo "Lost camera frame still visible: $state"; exit 1; }
+ [[ "$state" == "CAMERA_LOST_FRAME_OK CAMERA_SINGLE_ARROW_OK" ]] || { echo "Lost camera frame still visible: $state"; exit 1; }
  echo "$state $side"
  adb shell uiautomator dump /sdcard/camera-hint.xml
  adb pull /sdcard/camera-hint.xml "ui-proof/camera-hint-$side.xml"

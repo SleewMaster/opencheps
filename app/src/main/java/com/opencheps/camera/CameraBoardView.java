@@ -24,7 +24,7 @@ public final class CameraBoardView extends View {
     public void trackingLost(){aligned=false;moves=Collections.emptyList();setContentDescription("Доска потеряна · ищу сетку");invalidate();}
     public boolean editing(){return editing;}
     public void setEditing(boolean value){editing=value;aligned=false;moves=Collections.emptyList();invalidate();}
-    public void setMoves(List<StockfishEngine.Pv> values,Side side){moves=new ArrayList<>(values);perspective=side;setContentDescription(moves.isEmpty()?"Доска камеры":"Ход "+moves.get(0).uci);invalidate();}
+    public void setMoves(List<StockfishEngine.Pv> values,Side side){moves=values.isEmpty()?Collections.emptyList():Collections.singletonList(values.get(0));perspective=side;setContentDescription(moves.isEmpty()?"Доска камеры":"Ход "+moves.get(0).uci);invalidate();}
     public void clear(){moves=Collections.emptyList();invalidate();}
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){
         float side=Math.min(w*.78f,h*.78f),x=(w-side)/2,y=(h-side)/2;
