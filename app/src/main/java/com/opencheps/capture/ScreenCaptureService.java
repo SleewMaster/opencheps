@@ -524,14 +524,15 @@ public class ScreenCaptureService extends Service {
             adviceCache.put(search.key,forced);lastEngineFen=fen;renderAnalysis(forced,fen,token,true);panelStatus("Единственный допустимый ход");return;
         }
         final boolean human=humanStyle;
+        final boolean quick=Prefs.quickReply(getApplicationContext());
         final int think=PlayerStyle.searchMillis(human,Prefs.thinkMs(getApplicationContext()));
         final int multiPv=Prefs.multiPv(getApplicationContext());
         analysisBusy=true;lastEngineFen=fen;
-        panelStatus((human?"Шахматист · считаю":"Считаю")+" · "+think/1000f+" с");
+        panelStatus((human?"Шахматист · считаю":"Считаю")+" · "+(quick?"до ":"")+think/1000f+" с");
         analysis.execute(() -> {
             try {
                 // Only terminal bestmove may become an arrow. Search iterations stay internal.
-                final List<StockfishEngine.Pv> pvs=PlayerStyle.choose(search,engine.topMoves(search,think,PlayerStyle.searchCount(human,multiPv)),human,multiPv);
+                final List<StockfishEngine.Pv> pvs=PlayerStyle.choose(search,engine.topMoves(search,think,PlayerStyle.searchCount(human,multiPv),human,quick),human,multiPv);
                 if(destroyed)return;
                 worker.post(() -> {
                     analysisBusy=false;

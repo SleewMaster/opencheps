@@ -87,12 +87,15 @@ public class StockfishEngine {
     }
 
     public synchronized List<Pv> topMoves(String fen,int time,int count,Progress progress) throws Exception {
-        return search("position fen "+fen,fen,0,time,count,progress);
+        return search("position fen "+fen,fen,0,time,count,progress,null);
     }
     public synchronized List<Pv> topMoves(PositionHistory.Snapshot position,int time,int count)throws Exception {
-        return search(position.command,position.fen,position.gameId,time,count,null);
+        return search(position.command,position.fen,position.gameId,time,count,null,null);
     }
-    private List<Pv> search(String positionCommand,String fen,long gameId,int time,int count,Progress progress)throws Exception {
+    public synchronized List<Pv> topMoves(PositionHistory.Snapshot position,int time,int count,boolean human,boolean quick)throws Exception {
+        return search(position.command,position.fen,position.gameId,time,count,null,quick?new QuickDecision(position.fen,position.gameId,count,human):null);
+    }
+    private List<Pv> search(String positionCommand,String fen,long gameId,int time,int count,Progress progress,QuickDecision quick)throws Exception {
         if(!ready)throw new IllegalStateException("engine not started");
         if(gameId!=activeGameId){send("ucinewgame");send("isready");waitFor("readyok",6000);activeGameId=gameId;}
         count=Math.max(1,Math.min(3,count));setMultiPv(count);
@@ -101,12 +104,13 @@ public class StockfishEngine {
         searching=true;
         long lastPublish=System.nanoTime();
         String bestMove=null;
-        boolean mateStopped=false;
+        boolean stopRequested=false,terminal=false;
         try {
             send("go movetime "+Math.max(300,time));
             String line;
             while((line=out.readLine())!=null) {
                 if(line.startsWith("bestmove ")) {
+                    terminal=true;
                     String[] t=line.split("\\s+");
                     if(t.length>1&&UciInfo.isMove(t[1]))bestMove=t[1];
                     break;
@@ -114,15 +118,18 @@ public class StockfishEngine {
                 UciInfo info=UciInfo.parse(line);
                 if(info==null||info.index>count)continue;
                 latest[info.index]=new Pv(info.move,info.cp,info.mate,info.depth,info.exact);
-                if(!mateStopped&&info.index==1&&info.mate&&info.cp==99999&&MateProof.inOne(fen,info.move)){
-                    send("stop");mateStopped=true;
+                if(!stopRequested&&info.index==1&&info.mate&&info.cp==99999&&MateProof.inOne(fen,info.move)){
+                    send("stop");stopRequested=true;
                 }
+                if(!stopRequested&&quick!=null&&quick.accept(info)){send("stop");stopRequested=true;}
                 long now=System.nanoTime();
                 if(progress!=null&&info.index==1&&info.depth>=8&&now-lastPublish>=250_000_000L) {
                     progress.onUpdate(snapshot(latest));lastPublish=now;
                 }
             }
         } finally {searching=false;}
+        if(!terminal)throw new java.io.IOException("Engine closed before terminal bestmove");
+        if(bestMove==null)return new ArrayList<>();
         List<Pv> result=snapshot(latest);
         // The terminal bestmove is authoritative, even if an info line was absent.
         if(bestMove!=null&&(result.isEmpty()||!bestMove.equals(result.get(0).uci))) {

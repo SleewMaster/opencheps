@@ -37,8 +37,13 @@ click(find('styleEngine'));relaunch()
 assert find('styleEngine').get('checked')=='true','engine style was not saved'
 click(find('styleHuman'));relaunch()
 assert find('styleHuman').get('checked')=='true','human style was not saved'
+assert find('quickReply').get('checked')=='true','quick reply is not default'
+click(find('quickReply'));relaunch()
+assert find('quickReply').get('checked')=='false','quick reply was not saved'
+click(find('quickReply'));relaunch()
+find('styleHuman')
 with open('ui-proof/player-style.png','wb') as f:subprocess.run(['adb','exec-out','screencap','-p'],stdout=f,check=True)
-print('PLAYER_STYLE_UI_OK default human, both choices saved across restart')
+print('PLAYER_STYLE_UI_OK default human, both choices and quick reply saved across restart')
 click(find('modeDeep'));find('thinkLabel')
 PY
 adb shell uiautomator dump /sdcard/deep.xml

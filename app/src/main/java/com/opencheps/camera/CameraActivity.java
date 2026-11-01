@@ -243,9 +243,10 @@ public class CameraActivity extends AppCompatActivity {
         final String fen=search.fen;
         analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
         final boolean human=humanStyle;
-        int time=PlayerStyle.searchMillis(human,CameraSearchBudget.millis(verifiedPosition,Prefs.thinkMs(this),Prefs.cameraStrong(this))),count=PlayerStyle.searchCount(human,1);status.setText(withFeedback((human?"Шахматист · считаю":"Считаю")+" · "+time/1000f+" с"));
+        final boolean quick=Prefs.quickReply(this);
+        int time=PlayerStyle.searchMillis(human,CameraSearchBudget.millis(verifiedPosition,Prefs.thinkMs(this),Prefs.cameraStrong(this))),count=PlayerStyle.searchCount(human,1);status.setText(withFeedback((human?"Шахматист · считаю":"Считаю")+" · "+(quick?"до ":"")+time/1000f+" с"));
         analysis.execute(()->{
-            try{List<StockfishEngine.Pv> moves=PlayerStyle.choose(search,engine.topMoves(search,time,count),human,1);
+            try{List<StockfishEngine.Pv> moves=PlayerStyle.choose(search,engine.topMoves(search,time,count,human,quick),human,1);
                 main.post(()->{
                     boolean completed=search.key.equals(activeSearchKey);analysisBusy=false;activeSearchKey="";
                     if(!completed||destroyed||board!=session||moves.isEmpty()||MoveAnnouncement.label(fen,moves.get(0).uci)==null)return;

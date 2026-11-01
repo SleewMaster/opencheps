@@ -88,6 +88,9 @@ public class MainActivity extends AppCompatActivity {
         android.widget.CheckBox stronger=findViewById(R.id.cameraStrong);
         stronger.setChecked(Prefs.cameraStrong(this));
         stronger.setOnCheckedChangeListener((v,checked)->sp.edit().putBoolean("camera_strong",checked).apply());
+        android.widget.CheckBox quick=findViewById(R.id.quickReply);
+        quick.setChecked(Prefs.quickReply(this));
+        quick.setOnCheckedChangeListener((v,checked)->sp.edit().putBoolean("quick_reply",checked).apply());
         int pv    = Prefs.multiPv(this);
         String side = sp.getString(Prefs.KEY_USER_SIDE, "w");
 

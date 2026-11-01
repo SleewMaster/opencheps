@@ -25,6 +25,7 @@ public class Prefs {
     public static int thinkMs(Context c) { return Math.max(500,Math.min(15000,get(c).getInt(KEY_THINK_MS, 1500))); }
     public static int multiPv(Context c) { return Math.max(1,Math.min(3,get(c).getInt(KEY_MULTIPV, 1))); }
     public static boolean humanStyle(Context c){return get(c).getBoolean("human_style",true);}
+    public static boolean quickReply(Context c){return get(c).getBoolean("quick_reply",true);}
     public static boolean cameraStrong(Context c){return get(c).getBoolean("camera_strong",true);}
     public static void saveBoard(Context c,android.graphics.Rect r,int w,int h) {
         SharedPreferences.Editor e=get(c).edit();
