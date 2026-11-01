@@ -21,16 +21,21 @@ def find(identifier):
     for attempt in range(8):
         subprocess.run(['adb','shell','uiautomator','dump','/sdcard/scrolled.xml'],check=True,stdout=subprocess.DEVNULL)
         xml=subprocess.check_output(['adb','shell','cat','/sdcard/scrolled.xml']).decode()
+        with open('ui-proof/controls.xml','w') as f:f.write(xml)
         node=next((n for n in E.fromstring(xml).iter('node') if n.get('resource-id','').endswith('/'+identifier)),None)
         if node is not None:
             x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
-            if y2-y1>=(18 if identifier=='thinkLabel' else 38) and y2<1140:return node
+            if y1>=80 and y2-y1>=(18 if identifier=='thinkLabel' else 70) and y2<1050:return node
         subprocess.run(['adb','shell','input','swipe','360','990','360','570','300'],check=True)
     raise AssertionError('control unreachable: '+identifier)
 def click(node):
     x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
     subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+    print('Native click:',node.get('text'),node.attrib['bounds'],flush=True)
 def relaunch():
+    # Let Android pause the activity and flush pending SharedPreferences.apply writes.
+    subprocess.run(['adb','shell','input','keyevent','KEYCODE_HOME'],check=True)
+    subprocess.run(['adb','shell','uiautomator','dump','/sdcard/paused.xml'],check=True,stdout=subprocess.DEVNULL)
     subprocess.run(['adb','shell','am','start','-W','-S','-n','com.opencheps.bottrainer/com.opencheps.ui.MainActivity'],check=True,stdout=subprocess.DEVNULL)
 assert find('styleHuman').get('checked')=='true','human style is not default'
 click(find('styleEngine'));relaunch()
