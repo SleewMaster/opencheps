@@ -24,7 +24,7 @@ def find(identifier):
         node=next((n for n in E.fromstring(xml).iter('node') if n.get('resource-id','').endswith('/'+identifier)),None)
         if node is not None:
             x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
-            if y2-y1>=38 and y2<1140:return node
+            if y2-y1>=(18 if identifier=='thinkLabel' else 38) and y2<1140:return node
         subprocess.run(['adb','shell','input','swipe','360','990','360','570','300'],check=True)
     raise AssertionError('control unreachable: '+identifier)
 def click(node):
