@@ -30,6 +30,7 @@ import androidx.core.app.NotificationCompat;
 
 import com.opencheps.R;
 import com.opencheps.engine.StockfishEngine;
+import com.opencheps.engine.PlayerStyle;
 import com.opencheps.overlay.ArrowOverlayView;
 import com.opencheps.overlay.FloatingPanel;
 import com.opencheps.overlay.OverlayService;
@@ -120,6 +121,7 @@ public class ScreenCaptureService extends Service {
     private int halfmoveClock = 0, fullmoveNumber = 1;
     private List<StockfishEngine.Pv> currentPvs = new ArrayList<>();
     private String lastEngineFen = "";
+    private boolean humanStyle;
     private String lastDisplayedArrowFen = "";
     private int lostBoardCount = 0;
     private BoardDetector.Board lastKnownBoard;
@@ -153,7 +155,7 @@ public class ScreenCaptureService extends Service {
             return START_NOT_STICKY;
         }
 
-        isRunning=true;
+        isRunning=true;humanStyle=Prefs.humanStyle(this);
         startInForeground();
         String sideStr = intent.getStringExtra(EXTRA_USER_SIDE);
         if (sideStr == null) sideStr = Prefs.userSide(this);
@@ -521,14 +523,15 @@ public class ScreenCaptureService extends Service {
             List<StockfishEngine.Pv> forced=java.util.Collections.singletonList(new StockfishEngine.Pv(legal.get(0).move,0,false,0));
             adviceCache.put(search.key,forced);lastEngineFen=fen;renderAnalysis(forced,fen,token,true);panelStatus("Единственный допустимый ход");return;
         }
-        final int think=Prefs.thinkMs(getApplicationContext());
+        final boolean human=humanStyle;
+        final int think=PlayerStyle.searchMillis(human,Prefs.thinkMs(getApplicationContext()));
         final int multiPv=Prefs.multiPv(getApplicationContext());
         analysisBusy=true;lastEngineFen=fen;
-        panelStatus("Считаю · "+think/1000f+" с");
+        panelStatus((human?"Шахматист · считаю":"Считаю")+" · "+think/1000f+" с");
         analysis.execute(() -> {
             try {
                 // Only terminal bestmove may become an arrow. Search iterations stay internal.
-                final List<StockfishEngine.Pv> pvs=engine.topMoves(search,think,multiPv);
+                final List<StockfishEngine.Pv> pvs=PlayerStyle.choose(search,engine.topMoves(search,think,PlayerStyle.searchCount(human,multiPv)),human,multiPv);
                 if(destroyed)return;
                 worker.post(() -> {
                     analysisBusy=false;
@@ -558,7 +561,7 @@ public class ScreenCaptureService extends Service {
                 :String.format(java.util.Locale.US,"%+.2f",best.cp/100.0);
         String name=MoveAnnouncement.label(fen,best.uci);
         panelEval((name==null?formatUci(best.uci):name)+(best.depth>0?"\n"+eval:""));
-        panelStatus(best.depth>0?"Готово · глубина "+best.depth:"Ход готов");
+        panelStatus(humanStyle?"Шахматист · "+PlayerStyle.idea(fen,best.uci):best.depth>0?"Готово · глубина "+best.depth:"Ход готов");
     }
 
     private void repushCurrentArrows(BoardDetector.Board board) {

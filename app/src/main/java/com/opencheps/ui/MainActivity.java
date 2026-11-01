@@ -76,6 +76,9 @@ public class MainActivity extends AppCompatActivity {
         sourceCamera=findViewById(R.id.sourceCamera);
 
         SharedPreferences sp = Prefs.get(this);
+        RadioGroup playStyle=findViewById(R.id.playStyle);
+        playStyle.check(Prefs.humanStyle(this)?R.id.styleHuman:R.id.styleEngine);
+        playStyle.setOnCheckedChangeListener((g,id)->{sp.edit().putBoolean("human_style",id==R.id.styleHuman).apply();renderPvLabel(Prefs.multiPv(this));});
         if(sp.getBoolean("camera_mode",false))sourceCamera.setChecked(true);
         sourceGroup.setOnCheckedChangeListener((g,id)->{
             sp.edit().putBoolean("camera_mode",id==R.id.sourceCamera).apply();renderSource();
@@ -93,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
         multiPvBar.setMax(2);
         multiPvBar.setProgress(pv - 1);
         thinkTv.setText(thinkLabelText(think));
-        multiPvTv.setText(pv==1?"Одна стрелка · лучший ход":"Стрелок: "+pv);
+        renderPvLabel(pv);
         if ("b".equals(side)) sideBlack.setChecked(true); else sideWhite.setChecked(true);
 
         View.OnClickListener preset = v -> {
@@ -117,7 +120,7 @@ public class MainActivity extends AppCompatActivity {
         multiPvBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar b, int v, boolean u) {
                 int n = v + 1;
-                multiPvTv.setText(n==1?"Одна стрелка · лучший ход":"Стрелок: "+n);
+                renderPvLabel(n);
                 sp.edit().putInt(Prefs.KEY_MULTIPV, n).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar b) {}
@@ -154,6 +157,7 @@ public class MainActivity extends AppCompatActivity {
         String mode=ms<=1500?"быстро":ms<=4000?"баланс":"глубокий анализ";
         return String.format(java.util.Locale.forLanguageTag("ru"),"%.1f с · %s",ms/1000f,mode);
     }
+    private void renderPvLabel(int n){multiPvTv.setText(n==1?(Prefs.humanStyle(this)?"Одна стрелка · рекомендация":"Одна стрелка · лучший ход"):"Стрелок: "+n);}
     private void renderPreset(int ms) {
         int selected=ms<=1500?R.id.modeFast:ms<=4000?R.id.modeBalanced:R.id.modeDeep;
         for(int id:new int[]{R.id.modeFast,R.id.modeBalanced,R.id.modeDeep}) {

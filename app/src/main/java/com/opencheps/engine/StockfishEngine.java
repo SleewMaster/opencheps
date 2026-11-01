@@ -19,11 +19,15 @@ public class StockfishEngine {
         public final int cp;
         public final boolean mate;
         public final int depth;
+        public final boolean exact;
         public Pv(String uci, int cp, boolean mate) {
             this(uci,cp,mate,0);
         }
         public Pv(String uci,int cp,boolean mate,int depth) {
-            this.uci=uci;this.cp=cp;this.mate=mate;this.depth=depth;
+            this(uci,cp,mate,depth,true);
+        }
+        public Pv(String uci,int cp,boolean mate,int depth,boolean exact) {
+            this.uci=uci;this.cp=cp;this.mate=mate;this.depth=depth;this.exact=exact;
         }
     }
 
@@ -109,7 +113,7 @@ public class StockfishEngine {
                 }
                 UciInfo info=UciInfo.parse(line);
                 if(info==null||info.index>count)continue;
-                latest[info.index]=new Pv(info.move,info.cp,info.mate,info.depth);
+                latest[info.index]=new Pv(info.move,info.cp,info.mate,info.depth,info.exact);
                 if(!mateStopped&&info.index==1&&info.mate&&info.cp==99999&&MateProof.inOne(fen,info.move)){
                     send("stop");mateStopped=true;
                 }

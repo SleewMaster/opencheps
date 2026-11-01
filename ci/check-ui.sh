@@ -17,16 +17,30 @@ root=E.parse('ui-proof/main.xml');nodes=list(root.iter('node'))
 assert any('Твой следующий' in n.get('text','') for n in nodes)
 cta=next(n for n in nodes if n.get('resource-id','').endswith('/btnStart'))
 assert cta.get('enabled')=='true'
-button=next((n for n in nodes if n.get('resource-id','').endswith('/modeDeep')),None)
-if button is None:
-    subprocess.run(['adb','shell','input','swipe','360','950','360','450','300'],check=True)
-    subprocess.run(['adb','shell','uiautomator','dump','/sdcard/scrolled.xml'],check=True)
-    xml=subprocess.check_output(['adb','shell','cat','/sdcard/scrolled.xml']).decode()
-    button=next(n for n in E.fromstring(xml).iter('node') if n.get('resource-id','').endswith('/modeDeep'))
-x1,y1,x2,y2=map(int,re.findall(r'\d+',button.attrib['bounds']))
-subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+def find(identifier):
+    for attempt in range(8):
+        subprocess.run(['adb','shell','uiautomator','dump','/sdcard/scrolled.xml'],check=True,stdout=subprocess.DEVNULL)
+        xml=subprocess.check_output(['adb','shell','cat','/sdcard/scrolled.xml']).decode()
+        node=next((n for n in E.fromstring(xml).iter('node') if n.get('resource-id','').endswith('/'+identifier)),None)
+        if node is not None:
+            x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
+            if y2-y1>=38 and y2<1140:return node
+        subprocess.run(['adb','shell','input','swipe','360','990','360','570','300'],check=True)
+    raise AssertionError('control unreachable: '+identifier)
+def click(node):
+    x1,y1,x2,y2=map(int,re.findall(r'\d+',node.attrib['bounds']))
+    subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+def relaunch():
+    subprocess.run(['adb','shell','am','start','-W','-S','-n','com.opencheps.bottrainer/com.opencheps.ui.MainActivity'],check=True,stdout=subprocess.DEVNULL)
+assert find('styleHuman').get('checked')=='true','human style is not default'
+click(find('styleEngine'));relaunch()
+assert find('styleEngine').get('checked')=='true','engine style was not saved'
+click(find('styleHuman'));relaunch()
+assert find('styleHuman').get('checked')=='true','human style was not saved'
+with open('ui-proof/player-style.png','wb') as f:subprocess.run(['adb','exec-out','screencap','-p'],stdout=f,check=True)
+print('PLAYER_STYLE_UI_OK default human, both choices saved across restart')
+click(find('modeDeep'));find('thinkLabel')
 PY
-adb shell input swipe 360 1000 360 580 300
 adb shell uiautomator dump /sdcard/deep.xml
 adb pull /sdcard/deep.xml ui-proof/deep.xml
 python3 - <<'PY'

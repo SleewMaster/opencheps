@@ -2,6 +2,7 @@ package com.opencheps;
 import com.opencheps.engine.UciInfo;
 import org.junit.Test;import static org.junit.Assert.*;
 public class UciInfoTest {
+ @Test public void exactScoreIsDistinguishedFromBounds(){assertTrue(UciInfo.parse("info depth 16 score cp 30 pv e2e4").exact);assertFalse(UciInfo.parse("info depth 16 score cp 30 lowerbound pv e2e4").exact);assertFalse(UciInfo.parse("info depth 16 score cp 30 upperbound pv e2e4").exact);}
  @Test public void readsDepthMoveAndScore(){UciInfo p=UciInfo.parse("info depth 16 seldepth 20 multipv 1 score cp 37 nodes 1000 pv e2e4 e7e5");assertNotNull(p);assertEquals("e2e4",p.move);assertEquals(16,p.depth);assertEquals(37,p.cp);assertFalse(p.mate);}
  @Test public void readsAlternative(){assertEquals(3,UciInfo.parse("info depth 12 multipv 3 score cp -50 pv g1f3").index);}
  @Test public void readsPromotion(){assertEquals("a7a8n",UciInfo.parse("info depth 10 score cp 80 pv a7a8n").move);}

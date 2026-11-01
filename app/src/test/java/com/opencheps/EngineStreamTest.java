@@ -7,6 +7,7 @@ import com.opencheps.util.Side;
 import org.junit.Test;import static org.junit.Assert.*;
 import java.io.*;import java.lang.reflect.Field;import java.util.*;
 public class EngineStreamTest {
+ @Test public void boundStatusSurvivesEngineStream()throws Exception{StockfishEngine e=engine(new StringReader("info depth 16 score cp 30 lowerbound pv e2e4\nbestmove e2e4\n"),new StringWriter());assertFalse(e.topMoves("fake",1500,1).get(0).exact);}
  private StockfishEngine engine(Reader source,Writer commands)throws Exception{
   StockfishEngine e=new StockfishEngine();set(e,"ready",true);set(e,"out",new BufferedReader(source));set(e,"in",new BufferedWriter(commands));return e;
  }

@@ -57,6 +57,7 @@ public class CameraActivity extends AppCompatActivity {
     private String verifiedFen="",displayFen="";
     private List<StockfishEngine.Pv> displayed=Collections.emptyList();
     private Side userSide;
+    private boolean humanStyle;
 
     private final ActivityResultLauncher<String> permission=registerForActivityResult(new ActivityResultContracts.RequestPermission(),granted->{
         if(granted)openCamera();else status.setText("Камера не разрешена. Нажми «Начать». Если запрет сохранён — разреши камеру в настройках приложения.");
@@ -64,7 +65,7 @@ public class CameraActivity extends AppCompatActivity {
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        ScreenCaptureService.stopSession(this);userSide="b".equals(Prefs.userSide(this))?Side.BLACK:Side.WHITE;
+        ScreenCaptureService.stopSession(this);userSide="b".equals(Prefs.userSide(this))?Side.BLACK:Side.WHITE;humanStyle=Prefs.humanStyle(this);
         perspective=userSide;
         templateBanks=CameraBoard.loadBanks(this);
         buildUi();
@@ -241,9 +242,10 @@ public class CameraActivity extends AppCompatActivity {
     private void analyze(PositionHistory.Snapshot search){
         final String fen=search.fen;
         analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
-        int time=CameraSearchBudget.millis(verifiedPosition,Prefs.thinkMs(this),Prefs.cameraStrong(this)),count=1;status.setText(withFeedback("Считаю · "+time/1000f+" с"));
+        final boolean human=humanStyle;
+        int time=PlayerStyle.searchMillis(human,CameraSearchBudget.millis(verifiedPosition,Prefs.thinkMs(this),Prefs.cameraStrong(this))),count=PlayerStyle.searchCount(human,1);status.setText(withFeedback((human?"Шахматист · считаю":"Считаю")+" · "+time/1000f+" с"));
         analysis.execute(()->{
-            try{List<StockfishEngine.Pv> moves=engine.topMoves(search,time,count);
+            try{List<StockfishEngine.Pv> moves=PlayerStyle.choose(search,engine.topMoves(search,time,count),human,1);
                 main.post(()->{
                     boolean completed=search.key.equals(activeSearchKey);analysisBusy=false;activeSearchKey="";
                     if(!completed||destroyed||board!=session||moves.isEmpty()||MoveAnnouncement.label(fen,moves.get(0).uci)==null)return;
@@ -269,7 +271,7 @@ public class CameraActivity extends AppCompatActivity {
         String label=MoveAnnouncement.label(verifiedFen,uci);
         moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+(best.depth>0?"\nОценка "+score:""));
 
-        status.setText(withFeedback((complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные")));
+        status.setText(withFeedback(humanStyle?"Сильный шахматист · "+PlayerStyle.idea(verifiedFen,uci):(complete?"Лучший ход":"Уточняю ход")+" · "+(userSide==Side.WHITE?"белые":"чёрные")));
     }
     private String withFeedback(String message){return !deviation.isEmpty()&&SystemClock.uptimeMillis()<deviationUntil?deviation+"\n"+message:message;}
     private boolean canAnnounce(){return active&&!destroyed&&!paused&&speech!=null&&speech.ready()&&voiceToggle.isChecked()&&displayComplete&&!displayed.isEmpty()&&!verifiedFen.isEmpty()&&verifiedFen.equals(displayFen)&&turnGate.permits(verifiedSearch);}
