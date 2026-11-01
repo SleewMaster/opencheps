@@ -30,6 +30,7 @@ public final class CameraBoard {
     private final DiagramConsensus reviewConsensus=new DiagramConsensus();
     private volatile boolean reviewRequested;
     private volatile boolean reviewRestart;
+    private volatile boolean freshReview;
     private boolean autoReviewOff;
     private Review pendingReview;
     private final BoardDetector.Board bounds=new BoardDetector.Board(0,0,SIZE,1);
@@ -48,9 +49,11 @@ public final class CameraBoard {
         private final float[][] features;
         private final int[] pixels;
         Review(DiagramReader.Result d,Side side,PieceTemplates bank,float[][] features,int[] pixels){diagram=d;perspective=side;this.bank=bank;this.features=features;this.pixels=pixels;}
+        public Bitmap snapshot(){return Bitmap.createBitmap(pixels,SIZE,SIZE,Bitmap.Config.ARGB_8888);}
     }
-    public void requestReview(){reviewRestart=true;reviewRequested=true;autoReviewOff=false;}
-    public void cancelReview(){reviewRequested=false;autoReviewOff=true;pendingReview=null;reviewConsensus.reset();}
+    public void requestReview(){freshReview=false;reviewRestart=true;reviewRequested=true;autoReviewOff=false;}
+    public void requestFreshReview(){requestReview();freshReview=true;}
+    public void cancelReview(){reviewRequested=false;autoReviewOff=true;freshReview=false;pendingReview=null;reviewConsensus.reset();}
     /** Called on the vision executor after explicit review; a fresh frame must still verify it. */
     public void applyReview(Review review,PositionSeed seed){
         if(seed==null||seed.error()!=null)throw new IllegalArgumentException("Invalid reviewed position");
@@ -77,7 +80,7 @@ public final class CameraBoard {
         BankMatch best=null;
         for(PieceTemplates bank:banks){
             PieceClassifier reader=new PieceClassifier();reader.setCameraMode(true);reader.useTemplates(bank,perspective);
-            float[][] screen=reader.labelCosts(square,bounds);
+            float[][] screen=opening?reader.labelCosts(square,bounds):reader.labelCostsAligned(square,bounds);
             for(Side side:opening?new Side[]{perspective,ChessPosition.opposite(perspective)}:new Side[]{perspective}){
             float[][] costs=canonical(screen,side);
             VisualMoveTracker.Match m=opening?VisualMoveTracker.matchOpening(CameraOpening.initial(),costs):VisualMoveTracker.match(position,costs);
@@ -118,11 +121,14 @@ public final class CameraBoard {
     }
     private Review readReview(Bitmap square){
         java.util.List<PieceTemplates> candidates=new java.util.ArrayList<>(banks);
-        if(classifier.isTrained())candidates.add(0,classifier.exportTemplates());
+        if(freshReview&&candidates.size()>1)candidates=new java.util.ArrayList<>(candidates.subList(candidates.size()-1,candidates.size()));
+        if(!freshReview&&classifier.isTrained())candidates.add(0,classifier.exportTemplates());
         PieceClassifier selected=null;DiagramReader.Result best=null;float score=Float.POSITIVE_INFINITY;
+        java.util.List<DiagramReader.Result> proposals=new java.util.ArrayList<>();
         for(PieceTemplates bank:candidates){
             PieceClassifier reader=new PieceClassifier();reader.setCameraMode(true);reader.useTemplates(bank,perspective);
-            DiagramReader.Result d=DiagramReader.read(reader.labelCosts(square,bounds));if(d==null)continue;
+            DiagramReader.Result d=DiagramReader.read(reader.labelCostsAligned(square,bounds));if(d==null)continue;
+            proposals.add(d);
             float rank=d.error;for(boolean u:d.uncertain)if(u)rank+=.005f;
             if(rank<score){score=rank;best=d;selected=reader;}
         }
@@ -131,7 +137,9 @@ public final class CameraBoard {
         // Keep the pooled proposal, but require the user to review each disagreement.
         PieceClassifier pointReader=new PieceClassifier();pointReader.useTemplates(selected.exportTemplates(),perspective);
         DiagramReader.Result point=DiagramReader.read(pointReader.labelCosts(square,bounds));
-        for(int i=0;i<64;i++)if(point==null||point.screen[i/8][i%8]!=best.screen[i/8][i%8])best.uncertain[i]=true;
+        DiagramReader.Result raw=DiagramReader.read(selected.unalignedCosts());
+        for(int i=0;i<64;i++)if(point==null||raw==null||point.screen[i/8][i%8]!=best.screen[i/8][i%8]||raw.screen[i/8][i%8]!=best.screen[i/8][i%8])best.uncertain[i]=true;
+        for(DiagramReader.Result proposal:proposals)for(int i=0;i<64;i++)if(proposal.screen[i/8][i%8]!=best.screen[i/8][i%8])best.uncertain[i]=true;
         if(!reviewConsensus.accept(best)){problem="Сканирую позицию · кадр "+reviewConsensus.frames()+" из "+DiagramConsensus.MAX_FRAMES+". Сомнительные клетки покажу для проверки.";return null;}
         int[] pixels=new int[SIZE*SIZE];square.getPixels(pixels,0,SIZE,0,0,SIZE,SIZE);
         return new Review(best,perspective,selected.exportTemplates(),selected.snapshotFeatures(square,bounds),pixels);

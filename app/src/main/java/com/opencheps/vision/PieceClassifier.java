@@ -22,6 +22,7 @@ public class PieceClassifier {
 
     private PixelMask annotationMask=PixelMask.NONE;
     private boolean cameraMode;
+    private float[][] unaligned;
     public synchronized void setCameraMode(boolean enabled){cameraMode=enabled;}
     public synchronized void setAnnotationMask(PixelMask mask){annotationMask=mask==null?PixelMask.NONE:mask;}
     private SquareSampler.Sample[] templates;
@@ -221,6 +222,17 @@ public class PieceClassifier {
 
     /** Costs for all 13 labels, without guessing the piece type first. */
     public synchronized float[][] labelCosts(Bitmap bmp, BoardDetector.Board board) {
+        return labelCosts(bmp,board,false);
+    }
+    /** Use bounded registration only for camera review and model recovery. */
+    public synchronized float[][] labelCostsAligned(Bitmap bmp,BoardDetector.Board board){
+        return labelCosts(bmp,board,true);
+    }
+    public synchronized float[][] unalignedCosts(){
+        if(unaligned==null)return null;float[][] out=new float[unaligned.length][];for(int i=0;i<out.length;i++)out[i]=unaligned[i].clone();return out;
+    }
+    private float[][] labelCosts(Bitmap bmp,BoardDetector.Board board,boolean aligned){
+        unaligned=aligned?new float[64][VisualMoveTracker.PIECES.length()]:null;
         if(!trained)return null;
         SquareSampler.Sample[] samples=sampleAll(bmp,board);
         if(samples==null)return null;
@@ -229,22 +241,32 @@ public class PieceClassifier {
         // directly: use both observations for dark pieces instead of matching
         // the inflated silhouette alone. Same-camera bootstrap stays unchanged.
         SquareSampler.Sample[] points=cameraMode&&normalizedTemplates!=null?sampleAll(bmp,board,false):null;
+        PieceTone tone=null;
+        if(aligned&&cameraMode&&normalizedTemplates!=null){float[][] f=new float[64][];for(int i=0;i<64;i++)f[i]=samples[i].feature;tone=new PieceTone(f);}
         float[][] costs=new float[64][VisualMoveTracker.PIECES.length()];
         for(int i=0;i<64;i++) {
             float[] feature=normalizedTemplates==null?samples[i].feature:normalizeContrast(samples[i].feature);
             float[] point=points==null?null:normalizeContrast(points[i].feature);
             float empty=SquareSampler.lumDistance(feature,new float[feature.length]);
             costs[i][0]=empty/SquareSampler.N/SquareSampler.N;
+            if(unaligned!=null)unaligned[i][0]=costs[i][0];
+            FeatureAlignment registration=aligned&&cameraMode&&normalizedTemplates!=null&&costs[i][0]>.008f?new FeatureAlignment(feature,point):null;
             for(int j=1;j<VisualMoveTracker.PIECES.length();j++) {
-                char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE;
+                char wanted=VisualMoveTracker.PIECES.charAt(j);float best=Float.MAX_VALUE,second=best;int firstIndex=-1,secondIndex=-1;
                 for(int k=0;k<labels.length;k++)if(labels[k]==wanted) {
                     float[] template=normalizedTemplates==null?templates[k].feature:normalizedTemplates[k];
                     float d=SquareSampler.lumDistance(feature,template);
                     if(point!=null&&Character.isLowerCase(wanted))d=.25f*d+.75f*SquareSampler.lumDistance(point,template);
                     d/=SquareSampler.N*SquareSampler.N;
-                    if(d<best)best=d;
+                    if(d<best){second=best;secondIndex=firstIndex;best=d;firstIndex=k;}
+                    else if(d<second){second=d;secondIndex=k;}
                 }
-                costs[i][j]=best;
+                if(unaligned!=null)unaligned[i][j]=best;
+                if(registration!=null){
+                    if(firstIndex>=0)best=Math.min(best,registration.distance(normalizedTemplates[firstIndex],Character.isLowerCase(wanted))/SquareSampler.N/SquareSampler.N);
+                    if(secondIndex>=0)best=Math.min(best,registration.distance(normalizedTemplates[secondIndex],Character.isLowerCase(wanted))/SquareSampler.N/SquareSampler.N);
+                }
+                costs[i][j]=best+(tone==null?0:tone.penalty(i,wanted));
             }
         }
         return costs;

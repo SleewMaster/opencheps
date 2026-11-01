@@ -31,6 +31,8 @@
                 <TextView android:text="1,5 с · быстрый режим" android:textSize="16sp" android:textColor="#EAF2FF" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/thinkLabel" android:textStyle="bold" android:layout_marginTop="16dp" />
                 <SeekBar android:id="@+id/thinkBar" android:progressTint="#B9F66E" android:thumbTint="#B9F66E" android:layout_width="match_parent" android:layout_height="40dp" />
                 <TextView android:text="Экран: стрелка появляется после расчёта и остаётся до следующего хода." android:textSize="12sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                <CheckBox android:id="@+id/cameraStrong" android:text="Усиленный расчёт камеры" android:textSize="12sp" android:textColor="#D8E6F7" android:buttonTint="#B9F66E" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" />
+                <TextView android:text="Не меньше 3 с, в тактике — 6 с. Учитывает ползунок. Выключи для самого быстрого ответа." android:textSize="11sp" android:textColor="#8FA5C2" android:layout_width="match_parent" android:layout_height="wrap_content" />
                 <TextView android:text="Одна стрелка · лучший ход" android:textSize="13sp" android:textColor="#D8E6F7" android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@+id/multiPvLabel" android:layout_marginTop="16dp" />
                 <SeekBar android:id="@+id/multiPvBar" android:progressTint="#67D7FF" android:thumbTint="#67D7FF" android:layout_width="match_parent" android:layout_height="36dp" />
             </LinearLayout>

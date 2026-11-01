@@ -83,12 +83,12 @@ public class StockfishEngine {
     }
 
     public synchronized List<Pv> topMoves(String fen,int time,int count,Progress progress) throws Exception {
-        return search("position fen "+fen,0,time,count,progress);
+        return search("position fen "+fen,fen,0,time,count,progress);
     }
     public synchronized List<Pv> topMoves(PositionHistory.Snapshot position,int time,int count)throws Exception {
-        return search(position.command,position.gameId,time,count,null);
+        return search(position.command,position.fen,position.gameId,time,count,null);
     }
-    private List<Pv> search(String positionCommand,long gameId,int time,int count,Progress progress)throws Exception {
+    private List<Pv> search(String positionCommand,String fen,long gameId,int time,int count,Progress progress)throws Exception {
         if(!ready)throw new IllegalStateException("engine not started");
         if(gameId!=activeGameId){send("ucinewgame");send("isready");waitFor("readyok",6000);activeGameId=gameId;}
         count=Math.max(1,Math.min(3,count));setMultiPv(count);
@@ -97,6 +97,7 @@ public class StockfishEngine {
         searching=true;
         long lastPublish=System.nanoTime();
         String bestMove=null;
+        boolean mateStopped=false;
         try {
             send("go movetime "+Math.max(300,time));
             String line;
@@ -109,6 +110,9 @@ public class StockfishEngine {
                 UciInfo info=UciInfo.parse(line);
                 if(info==null||info.index>count)continue;
                 latest[info.index]=new Pv(info.move,info.cp,info.mate,info.depth);
+                if(!mateStopped&&info.index==1&&info.mate&&info.cp==99999&&MateProof.inOne(fen,info.move)){
+                    send("stop");mateStopped=true;
+                }
                 long now=System.nanoTime();
                 if(progress!=null&&info.index==1&&info.depth>=8&&now-lastPublish>=250_000_000L) {
                     progress.onUpdate(snapshot(latest));lastPublish=now;
@@ -123,6 +127,9 @@ public class StockfishEngine {
             if(found!=null)result.remove(found);
             result.add(0,found!=null?found:new Pv(bestMove,0,false,0));
             while(result.size()>count)result.remove(result.size()-1);
+        }
+        if(!result.isEmpty()&&MateProof.inOne(fen,result.get(0).uci)){
+            Pv best=result.get(0);result.set(0,new Pv(best.uci,99999,true,best.depth));
         }
         return result;
     }

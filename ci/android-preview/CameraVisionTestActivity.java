@@ -9,10 +9,10 @@ public class CameraVisionTestActivity extends Activity {
     private static final int[][] THEMES={{0xffeeeed2,0xff769656},{0xfff0d9b5,0xffb58863},{0xffdee8ef,0xff7a9bb3},{0xffcdcdcd,0xffb4b4b4},{0xff3c3c3c,0xff646464}};
     @Override public void onCreate(Bundle b){super.onCreate(b);TextView result=new TextView(this);result.setText("Checking camera perspective…");setContentView(result);
         new Thread(()->{StringBuilder success=new StringBuilder(),failures=new StringBuilder();
-            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK","NOISY_SCAN_OK","FAST_REPLY_OK","AUTO_FIRST_OK","BANK_RECOVERY_OK"};
-            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake,this::checkNoisyScan,this::checkFastReply,this::checkAutoFirst,this::checkBankRecovery};
+            String[] names={"CAMERA_VISION_OK","SHAKE_OK","SNAP_OK","RECOVERY_OK","JOIN_OK","CONTINUE_OK","HIGHLIGHT_JOIN_OK","SMALL_RECOVERY_OK","START_BLACK_OK","ALTERNATIVE_OK","TURN_HANDSHAKE_OK","NOISY_SCAN_OK","FAST_REPLY_OK","AUTO_FIRST_OK","BANK_RECOVERY_OK","ALIGNED_REVIEW_OK","FRESH_REVIEW_OK"};
+            java.util.function.IntSupplier[] checks={this::check,this::checkShake,this::checkCoarse,this::checkRecovery,this::checkJoin,this::checkContinuation,this::checkHighlightedJoin,this::checkSmallRecovery,this::checkBlackStart,this::checkAlternative,this::checkTurnHandshake,this::checkNoisyScan,this::checkFastReply,this::checkAutoFirst,this::checkBankRecovery,this::checkAlignedReview,this::checkFreshReview};
             String[] completed=new String[checks.length];
-            for(int i:new int[]{13,14,12,11,10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
+            for(int i:new int[]{15,16,13,14,12,11,10,7,8,9,0,1,2,3,4,5,6})try{completed[i]=names[i]+" "+checks[i].getAsInt();}catch(Throwable t){android.util.Log.e("CameraVisionTest",names[i],t);failures.append(names[i]).append(": ").append(t).append("; ");break;}
             if(failures.length()==0)for(String entry:completed){if(success.length()>0)success.append(' ');success.append(entry);}
             String message=failures.length()==0?success.toString():"CAMERA_VISION_FAIL "+failures;
             final String answer=message;try(FileWriter w=new FileWriter(new File(getFilesDir(),"camera-vision-result.txt"))){w.write(answer);}catch(IOException e){throw new RuntimeException(e);}runOnUiThread(()->result.setText(answer));}).start();
@@ -275,6 +275,29 @@ public class CameraVisionTestActivity extends Activity {
             ownRaw=NativeVisionCheck.render(640,640,0,side==Side.WHITE?after.board:FenBuilder.flip(after.board),THEMES[theme]);ownShot=photograph(ownRaw,corners,true);seen=awaitBoard(session,ownShot,corners);
             if(seen.position==null||!gate.observe(seen.history,Side.BLACK)||gate.choose(seen.history,after.successors().get(0).move)==null)throw new AssertionError("normal turn handshake failed");
             ownRaw.recycle();ownShot.recycle();base.recycle();baseShot.recycle();raw.recycle();shot.recycle();passed++;
+        }return passed;
+    }
+    private int checkAlignedReview(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};
+        for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int theme:new int[]{0,2})for(float scale:new float[]{.94f,1.06f}){
+            PositionSeed seed=PositionSeed.parse("4k3/pp3ppp/2n1b3/3pP3/8/2N2N2/PP3PPP/4K2R w - - 7 20",side);char[][] screen=side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
+            CameraBoard session=new CameraBoard(side,java.util.Collections.singletonList(bank));session.requestReview();
+            Bitmap raw=NativeVisionCheck.renderShifted(640,640,0,screen,THEMES[theme],scale,1.5f,-1.5f),shot=photograph(raw,corners,true);CameraBoard.FrameResult seen=null;
+            for(int n=0;n<5;n++){seen=session.readFrame(shot,corners);if(seen.review!=null)break;}if(seen.review==null)throw new AssertionError("aligned review did not open");
+            Bitmap square=CameraBoard.rectify(shot,seen.corners);PieceClassifier reader=new PieceClassifier();reader.setCameraMode(true);reader.useTemplates(bank,side);DiagramReader.Result plain=DiagramReader.read(reader.labelCosts(square,new BoardDetector.Board(0,0,640,1)));
+            int before=0,after=0;for(int i=0;i<64;i++){if(plain.screen[i/8][i%8]!=screen[i/8][i%8])before++;if(seen.review.diagram.screen[i/8][i%8]!=screen[i/8][i%8]){after++;if(!seen.review.diagram.uncertain[i])throw new AssertionError("unflagged aligned error "+i);}}
+            if(after>before)throw new AssertionError("aligned recognition regressed "+side+" "+theme+" "+scale+" "+before+" -> "+after);
+            session.applyReview(seen.review,seed);if(awaitBoard(session,shot,corners).position==null)throw new AssertionError("aligned reviewed board was not accepted");
+            square.recycle();raw.recycle();shot.recycle();passed++;
+        }return passed;
+    }
+    private int checkFreshReview(){int passed=0;PieceTemplates good=openingBank();java.util.List<PieceTemplates.Entry> wrong=new java.util.ArrayList<>();for(PieceTemplates.Entry e:good.entries){char p=e.piece=='R'?'N':e.piece=='N'?'R':e.piece;wrong.add(new PieceTemplates.Entry(p,e.feature));}PieceTemplates poisoned=new PieceTemplates(wrong);
+        float[] corners={120,80,660,140,700,720,60,760};
+        for(Side side:new Side[]{Side.WHITE,Side.BLACK})for(int theme:new int[]{0,2}){
+            PositionSeed seed=PositionSeed.parse("r3k2r/ppp2ppp/2n1bn2/3p4/3P4/2N1PN2/PPP2PPP/R1BQ1RK1 b kq - 2 9",side);char[][] screen=side==Side.WHITE?seed.position.board:FenBuilder.flip(seed.position.board);
+            CameraBoard session=new CameraBoard(side,java.util.Arrays.asList(poisoned,good));session.requestFreshReview();Bitmap raw=NativeVisionCheck.render(640,640,0,screen,THEMES[theme]),shot=photograph(raw,corners,true);CameraBoard.FrameResult seen=null;
+            for(int n=0;n<5;n++){seen=session.readFrame(shot,corners);if(seen.review!=null)break;}if(seen.review==null)throw new AssertionError("fresh review did not open");
+            for(int canonical:new int[]{56,61,45}){int i=side==Side.WHITE?canonical:63-canonical;if(seen.review.diagram.screen[i/8][i%8]!=screen[i/8][i%8])throw new AssertionError("fresh review reused wrong learned piece "+canonical);}
+            session.applyReview(seen.review,seed);if(awaitBoard(session,shot,corners).position==null)throw new AssertionError("fresh review position not verified");raw.recycle();shot.recycle();passed++;
         }return passed;
     }
     private int checkAutoFirst(){int passed=0;PieceTemplates bank=openingBank();float[] corners={120,80,660,140,700,720,60,760};

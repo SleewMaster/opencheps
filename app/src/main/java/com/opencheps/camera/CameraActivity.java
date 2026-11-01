@@ -233,13 +233,15 @@ public class CameraActivity extends AppCompatActivity {
                 }catch(RuntimeException e){main.post(()->{reviewApplying=false;if(!destroyed)status.setText("Не удалось применить позицию · попробуй ещё раз");});}
             });
         },cancel);
+        editor.setReference(review.snapshot());
+        editor.setRescanAction(()->{if(reviewDialog!=dialog)return;reviewDialog=null;dialog.dismiss();invalidateAdvice();vision.execute(session::requestFreshReview);status.setText("Читаю доску заново по исходным образцам фигур");});
         dialog.setContentView(editor);dialog.setOnCancelListener(d->cancel.run());dialog.show();
         if(dialog.getWindow()!=null)dialog.getWindow().setLayout(-1,-1);
     }
     private void analyze(PositionHistory.Snapshot search){
         final String fen=search.fen;
         analysisBusy=true;activeSearchKey=search.key;final CameraBoard session=board;
-        int time=Prefs.thinkMs(this),count=1;status.setText(withFeedback("Считаю · "+time/1000f+" с"));
+        int time=CameraSearchBudget.millis(verifiedPosition,Prefs.thinkMs(this),Prefs.cameraStrong(this)),count=1;status.setText(withFeedback("Считаю · "+time/1000f+" с"));
         analysis.execute(()->{
             try{List<StockfishEngine.Pv> moves=engine.topMoves(search,time,count);
                 main.post(()->{
@@ -263,7 +265,7 @@ public class CameraActivity extends AppCompatActivity {
     }
     private void showMove(StockfishEngine.Pv best,boolean complete){
         String uci=best.uci;
-        String score=best.mate?"мат "+Math.abs(100000-Math.abs(best.cp)):String.format(Locale.forLanguageTag("ru"),"%+.2f",best.cp/100f);
+        String score=best.mate?(best.cp>0?"мат сопернику в ":"угроза мата нам в ")+Math.abs(100000-Math.abs(best.cp)):String.format(Locale.forLanguageTag("ru"),"%+.2f",best.cp/100f);
         String label=MoveAnnouncement.label(verifiedFen,uci);
         moveLabel.setText((label==null?uci.substring(0,2)+" → "+uci.substring(2,4):label)+(best.depth>0?"\nОценка "+score:""));
 

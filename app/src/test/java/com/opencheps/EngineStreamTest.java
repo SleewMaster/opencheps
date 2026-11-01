@@ -23,6 +23,9 @@ public class EngineStreamTest {
   assertEquals("e2e4",partial.get(0).uci);assertEquals(14,partial.get(0).depth);assertEquals("e2e4",finalMoves.get(0).uci);assertTrue(commands.toString().contains("stop\n"));
  }
  @Test public void noLegalMoveGivesEmptyResult()throws Exception{assertTrue(engine(new StringReader("bestmove (none)\n"),new StringWriter()).topMoves("fake",1500,1).isEmpty());}
+ @Test public void verifiedMateInOneStopsSearchOnlyOnce()throws Exception{StringWriter commands=new StringWriter();StockfishEngine e=engine(new StringReader("info depth 12 score mate 1 pv g6g7\ninfo depth 13 score mate 1 pv g6g7\nbestmove g6g7\n"),commands);List<StockfishEngine.Pv> result=e.topMoves(MateProofTest.WHITE,8000,1);assertEquals(1,commands.toString().split("stop\\n",-1).length-1);assertTrue(result.get(0).mate);assertEquals(99999,result.get(0).cp);}
+ @Test public void falseMateClaimDoesNotStopEarly()throws Exception{StringWriter commands=new StringWriter();StockfishEngine e=engine(new StringReader("info depth 12 score mate 1 pv e2e4\nbestmove e2e4\n"),commands);e.topMoves("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",8000,1);assertFalse(commands.toString().contains("stop\n"));}
+ @Test public void terminalImmediateMateIsRecognizedWithoutInfo()throws Exception{StockfishEngine.Pv p=engine(new StringReader("bestmove g3g2\n"),new StringWriter()).topMoves(MateProofTest.BLACK,8000,1).get(0);assertTrue(p.mate);assertEquals(99999,p.cp);}
  @Test public void sendsConfirmedMovesAndResetsOnlyBetweenGames()throws Exception{
   String start="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   PositionHistory h=new PositionHistory();h.reset(start);

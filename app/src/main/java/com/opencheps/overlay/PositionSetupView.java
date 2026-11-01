@@ -18,6 +18,8 @@ public final class PositionSetupView extends ScrollView {
     private final CheckBox[] rights=new CheckBox[4];
     private final EditText ep,fen;
     private final BoardEditor board;
+    private final ImageView reference;
+    private final Button photo,rescan;
     public PositionSetupView(Context context,char[][] screen,boolean[] uncertain,Side perspective,Side turn,
                              java.util.function.Consumer<PositionSeed> apply,Runnable cancel){
         super(context);this.screen=ChessPosition.copy(screen);this.uncertain=uncertain.clone();this.perspective=perspective;this.turn=turn;
@@ -26,7 +28,12 @@ public final class PositionSetupView extends ScrollView {
         text(body,"СТАРТ С ЭТОЙ ПОЗИЦИИ",20,0xffeaf2ff);
         button(body,"Закрыть",cancel);
         text(body,"Проверь фигуры. Нажми клетку, чтобы исправить. Жёлтым отмечено сомнение распознавания.",13,0xffa4b7d1);
-        board=new BoardEditor(context);body.addView(board,new LinearLayout.LayoutParams(-1,dp(280)));
+        LinearLayout reviewTools=row(body);
+        photo=button(reviewTools,"Фото доски",()->toggleReference());photo.setVisibility(GONE);
+        rescan=button(reviewTools,"Пересканировать",()->{});rescan.setVisibility(GONE);
+        FrameLayout display=new FrameLayout(context);body.addView(display,new LinearLayout.LayoutParams(-1,dp(280)));
+        board=new BoardEditor(context);display.addView(board,new FrameLayout.LayoutParams(-1,-1));
+        reference=new ImageView(context);reference.setScaleType(ImageView.ScaleType.FIT_CENTER);reference.setContentDescription("Исходный снимок распознанной доски");reference.setVisibility(GONE);display.addView(reference,new FrameLayout.LayoutParams(-1,-1));
         LinearLayout palette=row(body);
         for(char piece:".PNBRQK".toCharArray())pieceButton(palette,piece);
         palette=row(body);for(char piece:".pnbrqk".toCharArray())pieceButton(palette,piece);
@@ -56,6 +63,9 @@ public final class PositionSetupView extends ScrollView {
         button(body,"Отмена",cancel);refresh();
         setFocusableInTouchMode(true);requestFocus();setOnKeyListener((v,key,event)->{if(key==KeyEvent.KEYCODE_BACK&&event.getAction()==KeyEvent.ACTION_UP){cancel.run();return true;}return false;});
     }
+    public void setReference(Bitmap image){reference.setImageBitmap(image);photo.setVisibility(VISIBLE);}
+    public void setRescanAction(Runnable action){rescan.setVisibility(VISIBLE);rescan.setOnClickListener(v->action.run());}
+    private void toggleReference(){boolean show=reference.getVisibility()!=VISIBLE;reference.setVisibility(show?VISIBLE:GONE);board.setVisibility(show?GONE:VISIBLE);photo.setText(show?"Распознанные фигуры":"Фото доски");}
     private char[][] canonical(){return perspective==Side.WHITE?screen:FenBuilder.flip(screen);}
     private void refresh(){
         confirm.setEnabled(turn!=null);
